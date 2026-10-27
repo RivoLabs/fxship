@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/bwmarrin/discordgo"
@@ -14,6 +15,7 @@ type Discord struct {
 	s     *discordgo.Session
 	agent *Agent
 	icon  string // the server's icon, shown in each release card's header
+	out   *outbox
 }
 
 func NewDiscord(cfg *Config) (*Discord, error) {
@@ -23,6 +25,14 @@ func NewDiscord(cfg *Config) (*Discord, error) {
 	}
 	s.Identify.Intents = discordgo.IntentsGuilds
 	d := &Discord{cfg: cfg, s: s, icon: cfg.BrandIconURL}
+	s.MaxRestRetries = 3
+	d.out = newOutbox(4*time.Second, 1200*time.Millisecond,
+		func(id string, comps []discordgo.MessageComponent) error {
+			_, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{ID: id, Channel: cfg.DiscordChannel, Components: &comps, Flags: discordgo.MessageFlagsIsComponentsV2})
+			return err
+		},
+		func(id string) error { return s.ChannelMessageDelete(cfg.DiscordChannel, id) })
+	go d.out.Run()
 	s.AddHandler(d.onInteraction)
 	s.AddHandler(func(s *discordgo.Session, r *discordgo.Ready) {
 		log.Printf("discord: logged in as %s", r.User.Username)
@@ -239,6 +249,15 @@ func upperFirst(s string) string {
 }
 
 func (d *Discord) Publish(r *Release) {
+	// A card nobody decided on is noise once a newer release replaces it: remove it, so the
+	// channel shows one live card per decision. SUPERSEDED_CARDS=keep leaves them, greyed out.
+	if r.Status == StatusSuperseded && r.Actor == "" && d.cfg.DeleteSuperseded {
+		if r.MessageID != "" {
+			d.out.Delete(r.MessageID)
+			r.MessageID = ""
+		}
+		return
+	}
 	comps := d.card(r)
 	if r.MessageID == "" {
 		m, err := d.s.ChannelMessageSendComplex(d.cfg.DiscordChannel, &discordgo.MessageSend{Components: comps, Flags: discordgo.MessageFlagsIsComponentsV2})
@@ -249,9 +268,7 @@ func (d *Discord) Publish(r *Release) {
 		r.MessageID = m.ID
 		return
 	}
-	if _, err := d.s.ChannelMessageEditComplex(&discordgo.MessageEdit{ID: r.MessageID, Channel: d.cfg.DiscordChannel, Components: &comps, Flags: discordgo.MessageFlagsIsComponentsV2}); err != nil {
-		log.Printf("discord edit: %v", err)
-	}
+	d.out.Edit(r.MessageID, comps)
 }
 
 func (d *Discord) Info(msg string) {

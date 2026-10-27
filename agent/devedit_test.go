@@ -85,7 +85,7 @@ func TestDevEditsFlow(t *testing.T) {
 	if err := a.Bootstrap(); err != nil {
 		t.Fatal(err)
 	}
-	w := &devWatch{fileSigs: map[string]string{}}
+	w := newDevWatch()
 	tick := func() { a.devTick(w); a.devTick(w) } // first sees the change, second (debounce 0) reloads
 	dev := func(p string) string {
 		b, _ := os.ReadFile(filepath.Join(cfg.Dev.Worktree, p))

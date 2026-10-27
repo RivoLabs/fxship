@@ -106,9 +106,7 @@ func (d *Discord) PublishEdit(e *DevEdit) {
 		e.MessageID = m.ID
 		return
 	}
-	if _, err := d.s.ChannelMessageEditComplex(&discordgo.MessageEdit{ID: e.MessageID, Channel: d.cfg.DiscordChannel, Components: &comps, Flags: discordgo.MessageFlagsIsComponentsV2}); err != nil {
-		log.Printf("discord edit dev edits: %v", err)
-	}
+	d.out.Edit(e.MessageID, comps)
 }
 
 // canShip: approvers, server admins and DISCORD_SHIPPER_ROLE_IDS may ship or discard dev edits.

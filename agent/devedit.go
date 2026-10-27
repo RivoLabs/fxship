@@ -51,6 +51,53 @@ type devWatch struct {
 	lastChange  time.Time
 	reloadedSig string
 	fileSigs    map[string]string // per file, as of the last reload
+
+	// Files a resource rewrites on its own (stock lists, saved positions) would reload dev and
+	// update the card every few seconds forever. A file that keeps changing is treated as runtime
+	// data: it stops triggering reloads and card updates, but is still listed and still ships.
+	seen       map[string]string      // per file, as of the last tick
+	hits       map[string][]time.Time // when each file was seen changing, last minute only
+	noisyUntil map[string]time.Time
+}
+
+func newDevWatch() *devWatch {
+	return &devWatch{fileSigs: map[string]string{}, seen: map[string]string{}, hits: map[string][]time.Time{}, noisyUntil: map[string]time.Time{}}
+}
+
+const (
+	noisyWindow  = time.Minute
+	noisyHits    = 8               // changes inside noisyWindow that make a file runtime data
+	noisyRelease = 5 * time.Minute // quiet time before it counts as a person's edit again
+)
+
+// track notes which files changed since the last tick and reports the ones changing on their own.
+func (w *devWatch) track(now time.Time, sigs map[string]string) map[string]bool {
+	noisy := map[string]bool{}
+	for p, s := range sigs {
+		if old, ok := w.seen[p]; ok && old != s {
+			keep := w.hits[p][:0]
+			for _, t := range w.hits[p] {
+				if now.Sub(t) < noisyWindow {
+					keep = append(keep, t)
+				}
+			}
+			w.hits[p] = append(keep, now)
+			if len(w.hits[p]) >= noisyHits {
+				w.noisyUntil[p] = now.Add(noisyRelease)
+			}
+		}
+		if now.Before(w.noisyUntil[p]) {
+			noisy[p] = true
+		}
+	}
+	for p := range w.seen {
+		if _, ok := sigs[p]; !ok {
+			delete(w.hits, p)
+			delete(w.noisyUntil, p)
+		}
+	}
+	w.seen = sigs
+	return noisy
 }
 
 // globRe turns a DEV_IGNORE pattern into a regexp: ** crosses folders, * and ? stay inside one.
@@ -167,7 +214,7 @@ func (a *Agent) devChange(p, d string, gone bool) *ResourceChange {
 }
 
 func (a *Agent) DevWatchLoop() {
-	w := &devWatch{fileSigs: map[string]string{}}
+	w := newDevWatch()
 	for {
 		time.Sleep(a.cfg.DevWatch)
 		a.devTick(w)
@@ -186,11 +233,20 @@ func (a *Agent) devTick(w *devWatch) {
 		log.Printf("dev watch: %v", err)
 		return
 	}
+	now := time.Now()
+	sigs := make(map[string]string, len(edits))
+	for _, f := range edits {
+		sigs[f.Path] = a.fileSig(f.Path)
+	}
+	noisy := w.track(now, sigs)
 	var sig strings.Builder
 	for _, f := range edits {
-		fmt.Fprintf(&sig, "%s|%s|%s\n", f.Code, f.Path, a.fileSig(f.Path))
+		if noisy[f.Path] {
+			fmt.Fprintf(&sig, "noisy|%s\n", f.Path) // becoming noisy updates the card once
+			continue
+		}
+		fmt.Fprintf(&sig, "%s|%s|%s\n", f.Code, f.Path, sigs[f.Path])
 	}
-	now := time.Now()
 	if s := sig.String(); s != w.lastSig {
 		w.lastSig, w.lastChange = s, now
 		return
@@ -239,8 +295,16 @@ func (a *Agent) devTick(w *devWatch) {
 			cold = why + ": " + path.Base(rc.Dir)
 		}
 	}
+	var runtime []string
 	for _, f := range edits {
-		s := a.fileSig(f.Path)
+		if noisy[f.Path] {
+			runtime = append(runtime, f.Path)
+			if old, ok := w.fileSigs[f.Path]; ok {
+				fresh[f.Path] = old // not "changed" while it is runtime data
+			}
+			continue
+		}
+		s := sigs[f.Path]
 		fresh[f.Path] = s
 		d, g := a.resourceOf(f.Path, atHead)
 		if d == "" && !isServerCfg(a.cfg, f.Path) {
@@ -266,6 +330,10 @@ func (a *Agent) devTick(w *devWatch) {
 	w.fileSigs = fresh
 
 	e.Files, e.Resources, e.UpdatedAt, e.Note = edits, sortedKeys(all), now, ""
+	if len(runtime) > 0 {
+		e.Note = fmt.Sprintf("Changing on its own, so treated as runtime data and not reloaded: %s. If a resource writes it, add it to DEV_IGNORE.",
+			strings.Join(clipList(runtime, 3), ", "))
+	}
 	e.Lint = a.lintDisk(edits)
 	if touched {
 		e.DevOK, e.Reload = a.reloadDev(changed, gone, cold)

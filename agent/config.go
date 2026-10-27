@@ -46,6 +46,9 @@ type Config struct {
 	ApproverRoles  []string
 	ShipperRoles   []string // may ship or discard dev edits (approvers always can)
 	SlashCommand   string   // name of the slash command, "" to register none
+	// DeleteSuperseded removes the card of a release that a newer push replaced before anyone
+	// decided on it (SUPERSEDED_CARDS=delete, the default), instead of leaving it greyed out.
+	DeleteSuperseded bool
 
 	StatePath string
 	APIAddr   string
@@ -227,6 +230,13 @@ func loadConfig() (*Config, error) {
 		HotResources:    set(os.Getenv("HOT_RESOURCES")),
 		ShipEmailDomain: env("SHIP_EMAIL_DOMAIN", "users.noreply.fxship.invalid"),
 		ShipAuthors:     map[string]string{},
+	}
+	switch v := env("SUPERSEDED_CARDS", "delete"); v {
+	case "delete":
+		c.DeleteSuperseded = true
+	case "keep":
+	default:
+		return nil, fmt.Errorf("SUPERSEDED_CARDS: want delete or keep, got %q", v)
 	}
 	if strings.EqualFold(c.SlashCommand, "none") {
 		c.SlashCommand = ""
