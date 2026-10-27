@@ -201,6 +201,12 @@ func (g *Git) dropLocal(dir string, paths []string) error {
 			if err := os.Remove(filepath.Join(dir, p)); err != nil && !os.IsNotExist(err) {
 				return err
 			}
+			// Folders left empty go too, or FXServer warns about a resource without a manifest.
+			for d := filepath.Dir(filepath.Join(dir, p)); len(d) > len(filepath.Clean(dir)); d = filepath.Dir(d) {
+				if os.Remove(d) != nil {
+					break
+				}
+			}
 			continue
 		}
 		tracked = append(tracked, p)
