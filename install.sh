@@ -8,7 +8,7 @@
 #   curl -fsSL https://github.com/RivoLabs/fxship/releases/latest/download/install.sh | sudo bash
 set -euo pipefail
 
-YES=0 CONFIG=""
+ARGS=("$@") YES=0 CONFIG=""
 while [ $# -gt 0 ]; do
   case $1 in
     --config) CONFIG=${2:?--config needs a file}; YES=1; shift ;;
@@ -57,8 +57,8 @@ if [ -z "$BUNDLE" ] || [ ! -f "$BUNDLE/installer/linux/lib.sh" ]; then
   tar -xzf "$dir/$name" -C "$dir" --strip-components=1
   # The questions are read from the terminal, as stdin is this script. With no terminal (cloud-init,
   # CI) only --config runs work.
-  if { : </dev/tty; } 2>/dev/null; then exec bash "$dir/install.sh" "$@" </dev/tty; fi
-  exec bash "$dir/install.sh" "$@" </dev/null
+  if { : </dev/tty; } 2>/dev/null; then exec bash "$dir/install.sh" "${ARGS[@]}" </dev/tty; fi
+  exec bash "$dir/install.sh" "${ARGS[@]}" </dev/null
 fi
 export BUNDLE
 
