@@ -45,6 +45,9 @@ step_agent() {
     install -m 755 "$BUNDLE/installer/linux/files/fxship-dev-perms" /usr/local/sbin/fxship-dev-perms
     install -m 644 "$BUNDLE/installer/linux/files/fxship-dev-perms.service" "$BUNDLE/installer/linux/files/fxship-dev-perms.timer" /etc/systemd/system/
     systemctl daemon-reload
+    # Staff added before dev had its own user join its group too.
+    local u
+    for u in $(getent group fxship-staff | cut -d: -f4 | tr , ' '); do usermod -aG fivem-dev "$u"; done
     /usr/local/sbin/fxship-dev-perms
     systemctl enable --now fxship-dev-perms.timer >/dev/null 2>&1
     git -c safe.directory='*' -C "$DEV_WORKTREE" status --porcelain >/dev/null 2>&1 || true

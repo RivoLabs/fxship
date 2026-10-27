@@ -77,10 +77,12 @@ result when a change is fine, and a real new error isn't lost among the old ones
   SYSTEM and Administrators (Windows) only.
 - txAdmin, Uptime Kuma, Netdata and the Windows file share are only reachable over Tailscale or from
   the IPs you list. MariaDB and the agent's API listen on 127.0.0.1 only.
+- Each game server runs as its own account (`fivem` and `fivem-dev` on Ubuntu, `NT SERVICE\fxship-prod`
+  and `NT SERVICE\fxship-dev` on Windows). Dev's can't open prod's folder, and dev is held to its CPU
+  and memory cap.
 - Staff can change dev's files, never prod's, and can't read `secrets.cfg` or change where dev
-  listens.
-- On Windows each game server runs as its own account that can only reach its own folder. On Ubuntu
-  both run as the `fivem` user, with dev held to its CPU and memory cap.
+  listens. Code they add does run on dev with dev's access, though, so dev's license key and
+  database password are only as private as dev is: that's why dev has its own database user.
 - Downloads (FXServer aside, which Cfx doesn't publish checksums for) are checked against their
   publisher's checksums or signatures. fxship's own releases are checked against the release's
   `checksums.txt`.

@@ -7,6 +7,9 @@ Staff get their own login that can change the dev server's files and nothing mor
 prod, read `secrets.cfg`, or change the settings that decide where dev listens. What they save loads
 on dev at once and shows up in Discord to [Ship or Discard](/fxship/guides/dev-edits/).
 
+Code they add runs on dev with dev's own access, so give staff access to people you'd trust with
+dev's database. Dev can't reach prod's files or database either way.
+
 ## Ubuntu
 
 Staff connect over SSH with their own key, so there's no password to leak. Ask them for their

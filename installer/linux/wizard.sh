@@ -7,6 +7,10 @@
 ensure_fivem_user() {
   id fivem >/dev/null 2>&1 || useradd --system --create-home --home-dir "$FIVEM_ROOT" --shell /usr/sbin/nologin fivem
   install -d -o fivem -g fivem -m 755 "$FIVEM_ROOT"
+  # Dev runs as fivem-dev, which can't open prod's folder. Its group shares dev's files with the
+  # agent (fivem) and staff.
+  id fivem-dev >/dev/null 2>&1 || useradd --system --user-group --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin fivem-dev
+  id -nG fivem | grep -qw fivem-dev || usermod -aG fivem-dev fivem
 }
 
 # GitHub's SSH host keys, from its API, so the first connection can't be intercepted.
@@ -45,8 +49,12 @@ wizard_server() {
     one-ip|prod-only)
       ask PUBLIC_IP "Public IP players connect to" "${PUBLIC_IP:-$first}"
       PROD_IP=$PUBLIC_IP; DEV_IP=$PUBLIC_IP; PROD_GAME_PORT=30120
-      DEV_GAME_PORT=${DEV_GAME_PORT:-30130}
-      [ "$TOPOLOGY" = one-ip ] && ask DEV_GAME_PORT "Dev game port" "$DEV_GAME_PORT"
+      # Coming from two-ip, dev was on 30120 too: on one IP it needs its own port.
+      [ "${DEV_GAME_PORT:-30120}" = 30120 ] && DEV_GAME_PORT=30130
+      if [ "$TOPOLOGY" = one-ip ]; then
+        ask DEV_GAME_PORT "Dev game port" "$DEV_GAME_PORT"
+        [[ $DEV_GAME_PORT =~ ^[0-9]+$ ]] && [ "$DEV_GAME_PORT" != 30120 ] || die "the dev game port must be a number other than prod's 30120"
+      fi
       ;;
     two-ip)
       ask PROD_IP "Prod public IP" "${PROD_IP:-$first}"

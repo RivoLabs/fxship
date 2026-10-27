@@ -2,7 +2,7 @@
 # Give a staff member their own SSH login. Run again to replace their key.
 # Usage: fxship-add-staff <username> '<ssh public key>'
 #
-# They get: read access to the server folders, write access to dev's cfgs and files (prod stays
+# They get: read access to prod's folder, write access to dev's cfgs and files (prod stays
 # read-only, secrets.cfg unreadable), and sudo for exactly: start, stop, restart and status of dev,
 # status and logs of both, and `fxship status`. Prod is restarted from txAdmin, which warns players.
 set -euo pipefail
@@ -10,11 +10,11 @@ set -euo pipefail
 user=$1 key=$2
 [[ $user =~ ^[a-z][a-z0-9_-]{1,31}$ ]] || { echo "bad username: $user (lowercase letters, digits, _ and -)" >&2; exit 2; }
 [[ $key =~ ^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp[0-9]+|sk-ssh-ed25519@openssh.com)\ [A-Za-z0-9+/=]+(\ .*)?$ ]] || { echo "that doesn't look like a public key (the .pub file)" >&2; exit 2; }
-case $user in root|fivem|ubuntu|admin) echo "refusing system account $user" >&2; exit 2;; esac
+case $user in root|fivem|fivem-dev|ubuntu|admin) echo "refusing system account $user" >&2; exit 2;; esac
 
 getent group fxship-staff >/dev/null || groupadd fxship-staff
 id "$user" >/dev/null 2>&1 || useradd -m -s /bin/bash "$user"
-usermod -aG fivem,fxship-staff "$user"
+usermod -aG fivem,fivem-dev,fxship-staff "$user"
 passwd -l "$user" >/dev/null # key only
 
 install -d -m 700 -o "$user" -g "$user" "/home/$user/.ssh"

@@ -359,6 +359,9 @@ func (w *winSetup) wizard() {
 		if topo == "one-ip" {
 			c.vals["DEV_GAME_PORT"] = dp
 			dp = p.ask(c, "DEV_GAME_PORT", "Dev game port", dp)
+			if n, err := strconv.Atoi(dp); err != nil || n < 1 || n > 65535 || dp == "30120" {
+				die("the dev game port must be a number other than prod's 30120")
+			}
 		}
 		c.set("DEV_GAME_PORT", dp)
 	case "two-ip":

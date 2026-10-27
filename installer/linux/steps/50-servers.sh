@@ -81,8 +81,13 @@ step_servers() {
   local i servers=(prod)
   is_true "$DEV_ENABLED" && servers+=(dev)
   for i in "${servers[@]}"; do
-    local base=$FIVEM_ROOT/$i data=$FIVEM_ROOT/$i/server-data
-    install -d -o fivem -g fivem "$base" "$data" "$base/txData" "$base/txData/default"
+    local base=$FIVEM_ROOT/$i data=$FIVEM_ROOT/$i/server-data own=fivem
+    [ "$i" = dev ] && own=fivem-dev
+    install -d -o "$own" -g "$own" "$base" "$data" "$base/txData" "$base/txData/default"
+    # Prod's folder is closed to everyone outside the fivem group, dev's server included. Dev's is
+    # open to its group: the agent and staff.
+    chown "$own:$own" "$base"; chmod 750 "$base"
+    [ "$i" = dev ] && chmod 2775 "$data"
     import_cfgs "$data"
 
     instance_cfg "$i" | managed "$data/instance.cfg"
@@ -98,7 +103,7 @@ exec server.fxship.cfg
 CFG
     local onesync=""
     if [ -f "$data/server.cfg" ]; then onesync=$(fxship cfg-sanitize "$data" | awk '$1 == "onesync" {print $2}'); fi
-    chown fivem:fivem "$data"/*.cfg; chmod 600 "$data/secrets.cfg"; chmod 644 "$data/fxship.cfg" "$data/instance.cfg"
+    chown fivem:"$own" "$data"/*.cfg; chown "$own" "$data/secrets.cfg"; chmod 600 "$data/secrets.cfg"; chmod 644 "$data/fxship.cfg" "$data/instance.cfg"
     [ "$i" = dev ] && find "$data" -maxdepth 1 -name '*.cfg' ! -name secrets.cfg ! -name fxship.cfg ! -name 'server.fxship.cfg' ! -name instance.cfg -exec chmod 664 {} +
 
     local port hash
@@ -115,7 +120,7 @@ ENV
     umask 022
     [ -n "${TS_NAME:-}" ] && echo "TXHOST_TXA_URL=http://$TS_NAME:$port" >>/etc/fivem/$i.env
     txadmin_json "$i" "$data" "$onesync"
-    chown -R fivem:fivem "$base/txData"
+    chown -R "$own:$own" "$base/txData"
 
     install -d /etc/systemd/system/fivem@$i.service.d
     if [ "$i" = dev ]; then
@@ -153,17 +158,26 @@ start_servers() {
     if [ -f "$d/server.cfg" ] && [ -f "$tx" ]; then
       onesync=$(fxship cfg-sanitize "$d" | awk '$1 == "onesync" {print $2}')
       if [ -n "$onesync" ]; then
-        jq --arg o "$onesync" '.server.onesync //= $o' "$tx" >"$tx.new" && mv "$tx.new" "$tx" && chown fivem:fivem "$tx"
+        jq --arg o "$onesync" '.server.onesync //= $o' "$tx" >"$tx.new" && mv "$tx.new" "$tx" && chown --reference="$(dirname "$tx")" "$tx"
       fi
     fi
     port=$([ "$i" = prod ] && echo "$PROD_GAME_PORT" || echo "$DEV_GAME_PORT")
     # Two-ip servers listen on their own IP only, so ask where fxship asks.
     url=$([ "$i" = prod ] && echo "$PROD_INFO_URL" || echo "$DEV_INFO_URL")
     if systemctl is-active --quiet "fivem@$i"; then
-      ok "$i is already running (changes apply at its next restart)"
-      continue
+      local pid
+      pid=$(systemctl show -p MainPID --value "fivem@$i")
+      # A dev started before it had its own user can't write its files any more: restart it.
+      if [ "$i" = dev ] && [ "$(ps -o user= -p "$pid" 2>/dev/null)" = fivem ]; then
+        systemctl restart fivem@dev
+        info "restarted dev so it runs as fivem-dev"
+      else
+        ok "$i is already running (changes apply at its next restart)"
+        continue
+      fi
+    else
+      systemctl start "fivem@$i"
     fi
-    systemctl start "fivem@$i"
     info "waiting for $i to come up on port $port..."
     local _
     for _ in $(seq 1 100); do game_up "$url" && break; sleep 3; done

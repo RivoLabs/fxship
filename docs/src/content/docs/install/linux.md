@@ -50,6 +50,10 @@ Then it installs everything, starts both servers, takes a first backup, and fini
 | Passwords | `/root/fxship-credentials.txt` (root only) |
 | Install log | `/var/log/fxship-install.log` |
 
+Prod runs as the `fivem` user and dev as `fivem-dev`, which can't open prod's folder: a bad resource
+on dev can't read prod's files, the database passwords or the deploy key. Dev is held to 2 CPU cores
+and 4 GB of memory by default (`DEV_CPU_CORES`, `DEV_MEMORY_MAX_MB`), so it can't slow prod down.
+
 ## Change a setting
 
 Run the installer again. Every question offers what you answered last time, so press Enter through

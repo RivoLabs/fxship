@@ -5,6 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+# Prod runs as fivem; dev's drop-in switches it to fivem-dev, which can't open prod's folder.
 User=fivem
 Group=fivem
 WorkingDirectory=/srv/fivem/%i
