@@ -239,6 +239,9 @@ func TestShipIdentity(t *testing.T) {
 	if n, e := a.shipIdentity("Alex.B!"); n != "Alex.B!" || e != "alex.b@users.noreply.test" {
 		t.Errorf("default = %s <%s>", n, e)
 	}
+	if n, e := a.shipIdentity("server (sam)"); n != "Sam Lee" || e != "sam@example.com" {
+		t.Errorf("cli actor = %s <%s>", n, e)
+	}
 	if _, e := a.shipIdentity("!!!"); e != "staff@users.noreply.test" {
 		t.Errorf("empty local part = %s", e)
 	}

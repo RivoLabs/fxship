@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily fxship backup
+
+[Timer]
+OnCalendar=*-*-* @BACKUP_TIME@
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

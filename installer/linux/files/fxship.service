@@ -1,0 +1,22 @@
+[Unit]
+Description=fxship deploy agent
+After=network-online.target fivem@prod.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fivem
+Group=fivem
+EnvironmentFile=/etc/fxship/fxship.env
+ExecStart=/usr/local/bin/fxship daemon
+Restart=always
+RestartSec=5
+# The agent only needs the server folders; the rest of the system is read-only to it.
+ProtectSystem=strict
+ReadWritePaths=/srv/fivem /tmp
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

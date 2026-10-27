@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# Give a staff member their own SSH login. Run again to replace their key.
+# Usage: fxship-add-staff <username> '<ssh public key>'
+#
+# They get: read access to the server folders, write access to dev's cfgs and files (prod stays
+# read-only, secrets.cfg unreadable), and sudo for exactly: start, stop, restart and status of dev,
+# status and logs of both, and `fxship status`. Prod is restarted from txAdmin, which warns players.
+set -euo pipefail
+[ $# -eq 2 ] || { echo "usage: $0 <username> '<ssh public key>'" >&2; exit 2; }
+user=$1 key=$2
+[[ $user =~ ^[a-z][a-z0-9_-]{1,31}$ ]] || { echo "bad username: $user (lowercase letters, digits, _ and -)" >&2; exit 2; }
+[[ $key =~ ^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp[0-9]+|sk-ssh-ed25519@openssh.com)\ [A-Za-z0-9+/=]+(\ .*)?$ ]] || { echo "that doesn't look like a public key (the .pub file)" >&2; exit 2; }
+case $user in root|fivem|ubuntu|admin) echo "refusing system account $user" >&2; exit 2;; esac
+
+getent group fxship-staff >/dev/null || groupadd fxship-staff
+id "$user" >/dev/null 2>&1 || useradd -m -s /bin/bash "$user"
+usermod -aG fivem,fxship-staff "$user"
+passwd -l "$user" >/dev/null # key only
+
+install -d -m 700 -o "$user" -g "$user" "/home/$user/.ssh"
+printf '%s\n' "$key" >"/home/$user/.ssh/authorized_keys"
+chown "$user:$user" "/home/$user/.ssh/authorized_keys"
+chmod 600 "/home/$user/.ssh/authorized_keys"
+
+for i in prod dev; do
+  d=/srv/fivem/$i/server-data
+  [ -d "$d" ] || continue
+  mode=$([ $i = dev ] && echo 664 || echo 644)
+  find "$d" -maxdepth 1 -name '*.cfg' ! -name secrets.cfg ! -name fxship.cfg ! -name server.fxship.cfg -exec chmod $mode {} +
+  [ -f "$d/secrets.cfg" ] && chmod 600 "$d/secrets.cfg"
+done
+
+# Exact commands only: a wildcard would let journalctl --vacuum or other systemctl verbs through.
+tmp=$(mktemp)
+cat >"$tmp" <<'SUDO'
+# Managed by fxship-add-staff.
+Cmnd_Alias FXSHIP_DEV  = /usr/bin/systemctl start fivem@dev, /usr/bin/systemctl stop fivem@dev, \
+                         /usr/bin/systemctl restart fivem@dev, /usr/bin/systemctl status fivem@dev
+Cmnd_Alias FXSHIP_PROD = /usr/bin/systemctl status fivem@prod
+Cmnd_Alias FXSHIP_LOGS = /usr/bin/journalctl -u fivem@dev -f, /usr/bin/journalctl -u fivem@dev -n 300 --no-pager, \
+                         /usr/bin/journalctl -u fivem@prod -f, /usr/bin/journalctl -u fivem@prod -n 300 --no-pager
+Cmnd_Alias FXSHIP_CLI  = /usr/local/bin/fxship status
+%fxship-staff ALL=(root) NOPASSWD: FXSHIP_DEV, FXSHIP_PROD, FXSHIP_LOGS, FXSHIP_CLI
+SUDO
+visudo -cqf "$tmp" || { echo "sudoers did not validate" >&2; rm -f "$tmp"; exit 1; }
+install -m 440 -o root -g root "$tmp" /etc/sudoers.d/fxship-staff
+rm -f "$tmp"
+
+host=""
+if command -v tailscale >/dev/null; then
+  host=$(tailscale status --self --json 2>/dev/null | jq -r '.Self.DNSName // empty' | sed 's/\.$//') || host=""
+fi
+ip=$(sed -n 's/^PUBLIC_IP="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' /etc/fxship/fxship.env | tail -1)
+echo "added $user: ssh $user@${host:-${ip:-$(hostname -I | awk '{print $1}')}}"
+echo "dev files: /srv/fivem/dev/server-data (map it as a drive with SSHFS-Win on Windows)"

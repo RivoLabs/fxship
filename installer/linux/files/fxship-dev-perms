@@ -1,0 +1,9 @@
+#!/bin/sh
+# Keeps dev's files group-writable for staff and the agent. SFTP and git create files as 644 and
+# folders as 755 whatever the umask says; a folder a staff member made would then block deploys.
+D=$(sed -n 's/^DEV_WORKTREE="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' /etc/fxship/fxship.env | tail -1)
+D=${D:-/srv/fivem/dev/server-data}
+[ -d "$D" ] || exit 0
+find "$D" -path "$D/.git" -prune -o \( ! -group fivem -o ! -perm -g+w \) -exec chgrp fivem {} + -exec chmod g+w {} + 2>/dev/null
+find "$D" -path "$D/.git" -prune -o -type d ! -perm -g+s -exec chmod g+s {} + 2>/dev/null
+exit 0

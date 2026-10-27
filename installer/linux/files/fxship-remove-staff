@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Take a staff member's login away: ends their sessions and deletes the account and home folder.
+# Usage: fxship-remove-staff <username>
+set -euo pipefail
+[ $# -eq 1 ] || { echo "usage: $0 <username>" >&2; exit 2; }
+user=$1
+case $user in root|fivem|ubuntu|admin) echo "refusing system account $user" >&2; exit 2;; esac
+id "$user" >/dev/null 2>&1 || { echo "no such user: $user"; exit 0; }
+id -nG "$user" | grep -qw fxship-staff || { echo "$user is not fxship staff, refusing" >&2; exit 2; }
+pkill -KILL -u "$user" 2>/dev/null || true
+userdel -r "$user" 2>/dev/null || userdel "$user"
+echo "removed $user"

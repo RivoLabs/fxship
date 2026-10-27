@@ -20,7 +20,9 @@ import (
 var version = "dev"
 
 func main() {
-	if err := loadEnvFile(envFile()); err != nil && !os.IsNotExist(err) {
+	// systemd and the Windows service manager hand the daemon its settings already; the file is
+	// root-only, so it is only read when they aren't there.
+	if err := loadEnvFile(envFile()); err != nil && !os.IsNotExist(err) && !(os.IsPermission(err) && os.Getenv("API_TOKEN") != "") {
 		fmt.Fprintf(os.Stderr, "reading %s: %v\n", envFile(), err)
 		if os.IsPermission(err) {
 			fmt.Fprintln(os.Stderr, "run it as root (sudo fxship ...), or from an elevated PowerShell on Windows")

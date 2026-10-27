@@ -436,8 +436,12 @@ func (a *Agent) Ship(id, actor, msg string) (*DevEdit, *Release, error) {
 		rest = rest[n:]
 	}
 	name, email := a.shipIdentity(actor)
+	via := "from Discord"
+	if strings.HasPrefix(actor, "server (") {
+		via = "from the server's command line"
+	}
 	if _, err := a.git.run(dir, "-c", "user.name="+name, "-c", "user.email="+email, "commit", "-q", "-m", msg,
-		"-m", "Edited on the dev server and shipped from Discord by "+actor+"."); err != nil {
+		"-m", "Edited on the dev server and shipped "+via+" by "+name+"."); err != nil {
 		return undo(err)
 	}
 
@@ -492,6 +496,10 @@ var reIdentity = regexp.MustCompile(`^\s*(.+?)\s*<([^<>\s]+@[^<>\s]+)>\s*$`)
 // shipIdentity is the git author for a Ship pressed by actor: their mapped identity from
 // SHIP_AUTHORS, or their Discord name at SHIP_EMAIL_DOMAIN.
 func (a *Agent) shipIdentity(actor string) (name, email string) {
+	// The CLI's actor is "server (<login>)": the person is the login.
+	if strings.HasPrefix(actor, "server (") && strings.HasSuffix(actor, ")") {
+		actor = strings.TrimSuffix(strings.TrimPrefix(actor, "server ("), ")")
+	}
 	if m := reIdentity.FindStringSubmatch(a.cfg.ShipAuthors[actor]); m != nil {
 		return m[1], m[2]
 	}
