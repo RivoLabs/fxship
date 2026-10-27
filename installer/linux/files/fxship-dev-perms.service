@@ -1,0 +1,8 @@
+[Unit]
+Description=Keep dev's files group-writable for staff and the deploy agent
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/fxship-dev-perms
+Nice=10
+IOSchedulingClass=idle

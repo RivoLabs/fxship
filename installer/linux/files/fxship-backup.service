@@ -1,0 +1,9 @@
+[Unit]
+Description=fxship backup
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/fxship-backup run
+Nice=10
+IOSchedulingClass=idle

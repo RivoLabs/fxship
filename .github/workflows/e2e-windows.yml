@@ -1,0 +1,70 @@
+# Installs fxship on fresh Windows Server 2022 and 2025 runners from a freshly built bundle and
+# deploys real changes through it (tests/e2e-windows.ps1). Needs a test resources repo
+# (vars.FXSHIP_E2E_REPO), a deploy key that may write to it (secrets.FXSHIP_E2E_DEPLOY_KEY) and a
+# Cfx.re license key (secrets.FXSHIP_E2E_CFX_KEY).
+name: e2e (Windows Server)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['e2e/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: agent/go.mod
+          cache-dependency-path: agent/go.sum
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq gcc-mingw-w64-x86-64 zip
+      - run: scripts/build-release.sh v0.0.0-e2e.${{ github.run_number }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  windows:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            base: main          # resources layout
+          - os: windows-2025
+            base: server-data   # server-data layout
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 75
+    env:
+      E2E_REPO: ${{ vars.FXSHIP_E2E_REPO || 'RivoLabs/fxship-test-resources' }}
+      E2E_BRANCH: e2e-${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Install and deploy
+        shell: pwsh
+        env:
+          CFX_KEY: ${{ secrets.FXSHIP_E2E_CFX_KEY }}
+          DEPLOY_KEY: ${{ secrets.FXSHIP_E2E_DEPLOY_KEY }}
+        run: ./tests/e2e-windows.ps1 -Dist dist -Base ${{ matrix.base }}
+      - name: Collect logs
+        if: always()
+        shell: pwsh
+        run: ./tests/e2e-windows.ps1 -CollectLogs logs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: logs-${{ matrix.os }}
+          path: logs/

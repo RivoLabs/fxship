@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# fxship backups: database dumps plus everything on the box that isn't in git, into a restic repo.
+#
+#   fxship-backup run                       back up now (the daily timer runs this)
+#   fxship-backup list                      list snapshots
+#   fxship-backup restore-db <prod|dev> [snapshot]
+#                                           load a database from a snapshot (default: latest)
+#   fxship-backup restore-files <snapshot> <dir>
+#                                           extract a snapshot's files into dir to copy back by hand
+#
+# Settings come from /etc/fxship/fxship.env: BACKUP_REPO, RESTIC_PASSWORD and the storage keys.
+set -euo pipefail
+ENV=${FXSHIP_ENV:-/etc/fxship/fxship.env}
+[ -r "$ENV" ] || { echo "can't read $ENV (run as root)" >&2; exit 1; }
+set -a
+# shellcheck disable=SC1090
+. "$ENV"
+set +a
+: "${BACKUP_REPO:?BACKUP_REPO is not set in $ENV}" "${RESTIC_PASSWORD:?RESTIC_PASSWORD is not set}"
+export RESTIC_REPOSITORY=$BACKUP_REPO RESTIC_PASSWORD
+ROOT=${FIVEM_ROOT:-/srv/fivem}
+STAGE=/var/backups/fxship/stage
+MARK=/var/lib/fxship/backup.last
+
+db_cnf() { # db_cnf USER PASSWORD -> path of a client option file
+  local f; f=$(mktemp); chmod 600 "$f"
+  printf '[client]\nhost=%s\nport=%s\nuser="%s"\npassword="%s"\n' "${DB_HOST:-127.0.0.1}" "${DB_PORT:-3306}" "$1" "$2" >"$f"
+  echo "$f"
+}
+
+ensure_repo() {
+  case $RESTIC_REPOSITORY in /*) mkdir -p "$RESTIC_REPOSITORY";; esac
+  restic cat config >/dev/null 2>&1 || restic init
+}
+
+run() {
+  mkdir -p "$STAGE" "$(dirname "$MARK")"
+  trap 'echo "$(date +%s) failed" >"$MARK"' ERR
+  rm -rf "${STAGE:?}"/*
+  ensure_repo
+  local paths=("$STAGE" /etc/fxship /etc/fivem)
+  if [ -n "${DB_PROD_NAME:-}" ]; then
+    for which in PROD DEV; do
+      local name="DB_${which}_NAME" user="DB_${which}_USER" pass="DB_${which}_PASSWORD"
+      [ -n "${!name:-}" ] || continue
+      local cnf; cnf=$(db_cnf "${!user}" "${!pass}")
+      mariadb-dump --defaults-extra-file="$cnf" --single-transaction --quick --hex-blob --triggers \
+        --no-tablespaces --skip-lock-tables "${!name}" | gzip -6 >"$STAGE/${!name}.sql.gz"
+      rm -f "$cnf"
+      echo "dumped ${!name} ($(du -h "$STAGE/${!name}.sql.gz" | cut -f1))"
+    done
+  fi
+  for i in prod dev; do
+    local data=$ROOT/$i/server-data
+    [ -d "$data" ] || continue
+    # The repo is in git; back up what isn't: cfgs, secrets, txAdmin's data, and files resources
+    # change at runtime (git sees them as modified or untracked).
+    paths+=("$ROOT/$i/txData")
+    find "$data" -maxdepth 1 -name '*.cfg' -print0 | xargs -0 -r cp -p --parents -t "$STAGE"
+    if [ -d "$data/.git" ] || [ -f "$data/.git" ]; then local wt=$data; else local wt=$data/resources; fi
+    if [ -e "$wt/.git" ]; then
+      git -c safe.directory='*' -C "$wt" ls-files -m -o --exclude-standard -z \
+        | (cd "$wt" && tar --null -czf "$STAGE/$i-runtime-files.tar.gz" -T - 2>/dev/null) || true
+    fi
+  done
+  restic backup --tag fxship --host "$(hostname)" --exclude "$ROOT/*/txData/*/logs" "${paths[@]}"
+  restic forget --tag fxship --keep-daily 7 --keep-weekly 4 --keep-monthly 6 --prune
+  rm -rf "${STAGE:?}"/*
+  echo "$(date +%s) ok" >"$MARK"
+  echo "backup ok"
+}
+
+restore_db() {
+  local which=${1:?usage: fxship-backup restore-db <prod|dev> [snapshot]} snap=${2:-latest}
+  local up; up=$(tr '[:lower:]' '[:upper:]' <<<"$which")
+  local name="DB_${up}_NAME" user="DB_${up}_USER" pass="DB_${up}_PASSWORD"
+  [ -n "${!name:-}" ] || { echo "no $which database configured" >&2; exit 1; }
+  local tmp; tmp=$(mktemp -d)
+  # Dumps are always taken from each database's own name, so look the file up by that name.
+  restic restore "$snap" --target "$tmp" --include "$STAGE/${!name}.sql.gz" >/dev/null
+  local f=$tmp$STAGE/${!name}.sql.gz
+  [ -f "$f" ] || { echo "snapshot $snap has no dump of ${!name}" >&2; rm -rf "$tmp"; exit 1; }
+  echo "This replaces database ${!name} with the copy from snapshot $snap."
+  echo "Stop the $which server first (txAdmin or: systemctl stop fivem@$which)."
+  read -r -p "Type the database name to go ahead: " ok </dev/tty
+  [ "$ok" = "${!name}" ] || { echo "cancelled"; rm -rf "$tmp"; exit 1; }
+  local cnf; cnf=$(db_cnf "${!user}" "${!pass}")
+  mariadb --defaults-extra-file="$cnf" -e "DROP DATABASE IF EXISTS \`${!name}\`; CREATE DATABASE \`${!name}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+  gunzip -c "$f" | mariadb --defaults-extra-file="$cnf" "${!name}"
+  rm -rf "$cnf" "$tmp"
+  echo "restored ${!name} from $snap"
+}
+
+case ${1:-} in
+  run) run ;;
+  list) restic snapshots --tag fxship ;;
+  restore-db) shift; restore_db "$@" ;;
+  restore-files)
+    [ $# -eq 3 ] || { echo "usage: fxship-backup restore-files <snapshot> <dir>" >&2; exit 2; }
+    restic restore "$2" --target "$3" && echo "files are in $3; copy back what you need" ;;
+  *) sed -n '2,12p' "$0"; exit 2 ;;
+esac

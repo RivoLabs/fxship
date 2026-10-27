@@ -1,0 +1,46 @@
+# Supporting services for fxship. The installer runs this as the "fxship" compose project; with
+# Dokploy, paste the services you want into Dokploy instead (same file works as a raw compose).
+services:
+  mariadb:
+    image: ${MARIADB_IMAGE:-mariadb:12.3}
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?set MARIADB_ROOT_PASSWORD}
+      TZ: ${TZ:-UTC}
+      MARIADB_AUTO_UPGRADE: "1"
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-buffer-pool-size=${DB_BUFFER_POOL:-1G}
+      - --max-connections=300
+      - --skip-name-resolve
+      - --max-allowed-packet=256M
+    # Loopback only: FXServer runs on the host. Never publish on 0.0.0.0, Docker bypasses ufw.
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    profiles: ["db"]
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:2
+    restart: unless-stopped
+    environment:
+      # Skips Kuma 2's first-run database picker.
+      UPTIME_KUMA_DB_TYPE: sqlite
+    # Host network: Kuma reaches txAdmin and the agent on loopback, and its port 3001 is governed by
+    # ufw like any host service (published Docker ports bypass ufw).
+    network_mode: host
+    volumes:
+      - kuma-data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    profiles: ["kuma"]
+
+volumes:
+  mariadb-data:
+  kuma-data:

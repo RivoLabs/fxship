@@ -1,0 +1,21 @@
+[Unit]
+Description=FXServer + txAdmin (%i), managed by fxship
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Prod runs as fivem; dev's drop-in switches it to fivem-dev, which can't open prod's folder.
+User=fivem
+Group=fivem
+WorkingDirectory=/srv/fivem/%i
+EnvironmentFile=/etc/fivem/%i.env
+ExecStart=/opt/fivem/current/run.sh
+Restart=always
+RestartSec=10
+LimitNOFILE=65535
+KillSignal=SIGINT
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target
