@@ -47,7 +47,7 @@ flowchart LR
 
 ## What you get
 
-| | |
+| Feature | What it does |
 | --- | --- |
 | **Dev and prod on one box** | Two FXServer + txAdmin instances. Dev is capped on CPU and memory so it can never starve prod. One IP or two, or prod only. |
 | **Discord approvals** | Release cards with commits, changed resources, syntax and dev results. Role-gated buttons, plus `/deploy status`, `rollback`, `apply-now` and more. |
