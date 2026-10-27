@@ -142,6 +142,18 @@ func genPass(n int) string {
 	return string(b)
 }
 
+// accountPass is a genPass that also meets Windows' password complexity rule for local accounts:
+// upper and lower case letters and a digit, and not containing the account name.
+func accountPass(n int, name string) string {
+	for {
+		p := genPass(n)
+		if strings.ContainsAny(p, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") && strings.ContainsAny(p, "abcdefghijklmnopqrstuvwxyz") &&
+			strings.ContainsAny(p, "0123456789") && (len(name) < 3 || !strings.Contains(strings.ToLower(p), strings.ToLower(name))) {
+			return p
+		}
+	}
+}
+
 var reSlugJunk = regexp.MustCompile(`[^a-z0-9]+`)
 
 // slug turns a server name into a database-safe name, like the bash installer's slug.

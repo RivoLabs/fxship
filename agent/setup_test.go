@@ -249,3 +249,13 @@ func TestGeneratedCfgIsSafe(t *testing.T) {
 		}
 	}
 }
+
+func TestAccountPass(t *testing.T) {
+	for i := 0; i < 2000; i++ {
+		p := accountPass(20, "abc")
+		if len(p) != 20 || !strings.ContainsAny(p, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") || !strings.ContainsAny(p, "abcdefghijklmnopqrstuvwxyz") ||
+			!strings.ContainsAny(p, "0123456789") || strings.Contains(strings.ToLower(p), "abc") {
+			t.Fatalf("accountPass gave %q", p)
+		}
+	}
+}

@@ -57,7 +57,7 @@ func staffAdd(name string) int {
 		fmt.Fprintln(os.Stderr, "name: 2-20 lowercase letters, digits, _ . - (it becomes their Windows login and git name)")
 		return 2
 	}
-	pass := genPass(20)
+	pass := accountPass(20, name)
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", `$ErrorActionPreference='Stop'
 $pw = ConvertTo-SecureString $env:FXSHIP_STAFF_PW -AsPlainText -Force
 if (Get-LocalUser -Name $env:FXSHIP_STAFF_NAME -ErrorAction SilentlyContinue) {
