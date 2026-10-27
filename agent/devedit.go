@@ -475,9 +475,14 @@ func (a *Agent) Ship(id, actor, msg string) (*DevEdit, *Release, error) {
 		return e, nil, fmt.Errorf("nothing left to ship, dev matches GitHub")
 	}
 	dir := a.cfg.Dev.Worktree
-	before := a.git.Head(dir)
+	before, mine := a.git.Head(dir), ""
 	undo := func(why error) (*DevEdit, *Release, error) {
-		// Back to uncommitted edits, so nothing on dev is lost and Ship can be pressed again.
+		// Back to uncommitted edits, so nothing on dev is lost and Ship can be pressed again. After a
+		// replay the files are first put back to the edits' own commit, or the newer GitHub work
+		// would show up as edits.
+		if mine != "" && a.git.Head(dir) != mine {
+			a.git.run(dir, "reset", "--hard", "-q", mine)
+		}
 		a.git.run(dir, "reset", "--mixed", "-q", before)
 		e.Note, e.UpdatedAt = why.Error(), time.Now()
 		a.note.PublishEdit(e)
@@ -512,6 +517,7 @@ func (a *Agent) Ship(id, actor, msg string) (*DevEdit, *Release, error) {
 		"-m", "Edited on the dev server and shipped "+via+" by "+name+"."); err != nil {
 		return undo(err)
 	}
+	mine = a.git.Head(dir)
 
 	rebased := false
 	for attempt := 0; ; attempt++ {
@@ -591,12 +597,12 @@ func (a *Agent) Discard(id, actor string) (*DevEdit, error) {
 		return e, err
 	}
 	atHead, _ := a.git.ResourceDirs(a.git.Head(a.cfg.Dev.Worktree))
-	dirs, gone := map[string]bool{}, map[string]bool{}
+	dirs, gone, was := map[string]bool{}, map[string]bool{}, map[string]string{}
 	paths := make([]string, 0, len(edits))
 	for _, f := range edits {
 		paths = append(paths, f.Path)
 		if d, _ := a.resourceOf(f.Path, atHead); d != "" {
-			dirs[d] = true
+			dirs[d], was[f.Path] = true, d
 		}
 	}
 	if err := a.git.dropLocal(a.cfg.Dev.Worktree, paths); err != nil {
@@ -605,6 +611,10 @@ func (a *Agent) Discard(id, actor string) (*DevEdit, error) {
 	cold := ""
 	for _, f := range edits {
 		d, g := a.resourceOf(f.Path, atHead)
+		if d == "" && was[f.Path] != "" {
+			// A resource made on dev and never shipped: discarding deleted it, so it is stopped.
+			d, g = was[f.Path], true
+		}
 		if d == "" && !isServerCfg(a.cfg, f.Path) {
 			continue
 		}

@@ -111,19 +111,20 @@ func (a *Agent) PollLoop() {
 	}
 }
 
+// Poll holds the lock from the fetch through staging: a Ship slipping in between would be undone
+// by staging the older commit after it.
 func (a *Agent) Poll() error {
 	a.mu.Lock()
+	defer a.mu.Unlock()
 	sha, err := a.git.Fetch()
 	if err != nil || sha == a.state.LastSeen {
-		a.mu.Unlock()
 		return err
 	}
 	prevDev := a.state.DevSha
 	a.state.LastSeen = sha
 	a.save()
-	a.mu.Unlock()
 	log.Printf("new commit on %s: %s", a.cfg.Branch, short(sha))
-	return a.Stage(prevDev, sha)
+	return a.stage(prevDev, sha, nil)
 }
 
 // base is what prod will be running once everything already approved has landed.

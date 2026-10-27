@@ -116,30 +116,35 @@ func (a *Agent) RefreshDevDB(actor string) (string, error) {
 	load := exec.Command("mariadb", "--defaults-extra-file="+devCnf, "--max-allowed-packet=1G", db.DevName)
 	var dumpErr, loadErr bytes.Buffer
 	dump.Stderr, load.Stderr = &dumpErr, &loadErr
+	// From here dev is stopped and its database empty, so every failure says whether dev came back.
 	dumpOut, err := dump.StdoutPipe()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%v (%s)", err, startDev())
 	}
 	loadIn, err := load.StdinPipe()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%v (%s)", err, startDev())
 	}
 	if err := load.Start(); err != nil {
-		return "", err
+		return "", fmt.Errorf("starting mariadb: %v (%s)", err, startDev())
 	}
 	if err := dump.Start(); err != nil {
 		loadIn.Close()
 		load.Wait()
-		return "", err
+		return "", fmt.Errorf("starting mariadb-dump: %v (%s)", err, startDev())
 	}
 	copyErr := stripDefiners(loadIn, dumpOut)
 	loadIn.Close()
+	if copyErr != nil {
+		// The load stopped reading: mariadb-dump would block on a full pipe and Wait never return.
+		dump.Process.Kill()
+	}
 	dErr, lErr := dump.Wait(), load.Wait()
 	switch {
-	case dErr != nil:
-		return "", fmt.Errorf("dumping prod: %v: %s (%s)", dErr, clip(strings.TrimSpace(dumpErr.String()), 400), startDev())
 	case lErr != nil:
 		return "", fmt.Errorf("loading into dev: %v: %s (%s)", lErr, clip(strings.TrimSpace(loadErr.String()), 400), startDev())
+	case dErr != nil:
+		return "", fmt.Errorf("dumping prod: %v: %s (%s)", dErr, clip(strings.TrimSpace(dumpErr.String()), 400), startDev())
 	case copyErr != nil:
 		return "", fmt.Errorf("copying: %v (%s)", copyErr, startDev())
 	}

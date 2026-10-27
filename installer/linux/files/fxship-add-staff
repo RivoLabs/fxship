@@ -22,8 +22,10 @@ printf '%s\n' "$key" >"/home/$user/.ssh/authorized_keys"
 chown "$user:$user" "/home/$user/.ssh/authorized_keys"
 chmod 600 "/home/$user/.ssh/authorized_keys"
 
+root=$(sed -n 's/^FIVEM_ROOT="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' /etc/fxship/fxship.env 2>/dev/null | tail -1)
+root=${root:-/srv/fivem}
 for i in prod dev; do
-  d=/srv/fivem/$i/server-data
+  d=$root/$i/server-data
   [ -d "$d" ] || continue
   mode=$([ $i = dev ] && echo 664 || echo 644)
   find "$d" -maxdepth 1 -name '*.cfg' ! -name secrets.cfg ! -name fxship.cfg ! -name server.fxship.cfg -exec chmod $mode {} +
@@ -52,4 +54,4 @@ if command -v tailscale >/dev/null; then
 fi
 ip=$(sed -n 's/^PUBLIC_IP="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' /etc/fxship/fxship.env | tail -1)
 echo "added $user: ssh $user@${host:-${ip:-$(hostname -I | awk '{print $1}')}}"
-echo "dev files: /srv/fivem/dev/server-data (map it as a drive with SSHFS-Win on Windows)"
+echo "dev files: $root/dev/server-data (map it as a drive with SSHFS-Win on Windows)"

@@ -354,7 +354,9 @@ var reAssets = regexp.MustCompile(`(?m)^\s*(data_file\b|this_is_a_map\b|replace_
 func manifestLoadsAssets(src []byte) bool { return reAssets.Match(src) }
 
 func (g *Git) Show(sha, p string) ([]byte, error) {
-	cmd := exec.Command("git", "--git-dir", g.Dir, "show", sha+":"+p)
+	// Bytes as they are, so not through run, but with the same safe.directory and no prompts.
+	cmd := exec.Command("git", "-c", "safe.directory=*", "--git-dir", g.Dir, "show", sha+":"+p)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	return cmd.Output()
 }
 

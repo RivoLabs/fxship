@@ -84,16 +84,22 @@ func (x *TxAdmin) post(route string, payload any) (string, error) {
 		b, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		s := string(b)
-		if resp.StatusCode == 401 || strings.Contains(s, "logout") || strings.Contains(s, "CSRF") {
+		var r struct {
+			Type   string `json:"type"`
+			Msg    string `json:"msg"`
+			Md     bool   `json:"md"`
+			Logout bool   `json:"logout"`
+			Error  string `json:"error"`
+		}
+		parsed := json.Unmarshal(b, &r) == nil
+		// An expired session: txAdmin answers {"logout": true} or rejects the CSRF token. Only its
+		// own fields are looked at, as a command's reply can echo any text, and resending a
+		// command that ran would run it twice.
+		if resp.StatusCode == 401 || parsed && (r.Logout || r.Type != "success" && strings.Contains(r.Error+r.Msg, "CSRF")) {
 			x.csrf = ""
 			continue
 		}
-		var r struct {
-			Type string `json:"type"`
-			Msg  string `json:"msg"`
-			Md   bool   `json:"md"`
-		}
-		if json.Unmarshal(b, &r) == nil && r.Type == "error" {
+		if parsed && r.Type == "error" {
 			return s, fmt.Errorf("%s: txAdmin %s: %s", x.t.Name, route, r.Msg)
 		}
 		return s, nil

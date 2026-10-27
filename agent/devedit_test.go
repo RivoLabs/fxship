@@ -240,4 +240,28 @@ func TestDevEditsFlow(t *testing.T) {
 	if a.state.DevEdit.Status != EditOpen || originHead() != a.git.Head(cfg.Dev.Worktree) {
 		t.Fatal("refused ship changed something")
 	}
+
+	// 10. A ship that replays onto a teammate's push and then fails to push leaves dev exactly as it
+	// was: the staff edit uncommitted, the teammate's work not posing as an edit.
+	if _, err := a.Discard(a.state.DevEdit.ID, "sam"); err != nil {
+		t.Fatal(err)
+	}
+	settle()
+	tx.take()
+	before := a.git.Head(cfg.Dev.Worktree)
+	write(t, filepath.Join(cfg.Dev.Worktree, "[scripts]/bank/server.lua"), "local rate = 4\n")
+	settle()
+	teammate("[scripts]/shop/server.lua", "local price = 30\n", "price 30")
+	hook := filepath.Join(origin, "hooks", "pre-receive")
+	write(t, hook, "#!/bin/sh\necho closed for maintenance >&2\nexit 1\n")
+	os.Chmod(hook, 0o755)
+	if _, _, err := a.Ship(a.state.DevEdit.ID, "sam", "Bank rate 4"); err == nil {
+		t.Fatal("ship succeeded through a refusing remote")
+	}
+	os.Remove(hook)
+	status := sh(t, cfg.Dev.Worktree, "git", "status", "--porcelain")
+	if a.git.Head(cfg.Dev.Worktree) != before || strings.TrimSpace(status) != "M \"[scripts]/bank/server.lua\"" && strings.TrimSpace(status) != "M [scripts]/bank/server.lua" ||
+		dev("[scripts]/shop/server.lua") != "local price = 25\n" || a.state.DevEdit.Status != EditOpen {
+		t.Fatalf("after failed replayed ship: head %s (want %s), status %q, shop %q", a.git.Head(cfg.Dev.Worktree), before, status, dev("[scripts]/shop/server.lua"))
+	}
 }
