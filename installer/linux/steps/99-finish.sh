@@ -14,7 +14,7 @@ step_finish() {
   echo
   info "Push to $REPO_BRANCH and a release card appears in Discord within a minute."
   is_true "$DEV_ENABLED" && info "Give staff a login for editing dev: fxship-add-staff <name> '<ssh public key>'"
-  info "Commands: fxship status | fxship doctor | fxship-backup list"
+  info "Commands: fxship status | fxship doctor | fxship backup list"
   echo
   step "Checking everything (fxship doctor)"
   fxship doctor || warn "fix the items above, then run: fxship doctor"

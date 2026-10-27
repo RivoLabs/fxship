@@ -5,9 +5,9 @@ fx_url() {
   case $build in
     recommended|latest|optional) curl -sf -m 20 "$api" | jq -r ".${build}_download" ;;
     *[!0-9]*) return 1 ;;
-    *) curl -sf -m 30 https://runtime.fivem.net/artifacts/fivem/build_proot_linux/master/ \
-         | grep -o "href=\"\./$build-[0-9a-f]*/fx.tar.xz\"" | head -1 \
-         | sed "s#href=\"\./#https://runtime.fivem.net/artifacts/fivem/build_proot_linux/master/#; s#\"\$##" ;;
+    # Older builds are listed on Cfx's download page (the artifact index now redirects there).
+    *) curl -sfL -m 30 'https://docs.fivem.net/docs/server-download/?platform=legacy&os=linux' \
+         | grep -oE "https://runtime\.fivem\.net/artifacts/fivem/build_proot_linux/master/$build-[0-9a-f]+/fx\.tar\.xz" | head -1 ;;
   esac
 }
 

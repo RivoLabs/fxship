@@ -16,6 +16,6 @@ step_backups() {
     ok "backup done, then daily at ${BACKUP_TIME:-04:30} to $BACKUP_REPO"
   else
     tail -5 /tmp/fxship-backup.log | sed 's/^/    /'
-    warn "the backup failed; fix the location or keys, then: fxship-backup run"
+    warn "the backup failed; fix the location or keys, then: fxship backup run"
   fi
 }

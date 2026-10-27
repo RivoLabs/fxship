@@ -141,7 +141,7 @@ in_container() { systemd-detect-virt --container --quiet 2>/dev/null; }
 # Game servers that are up have players to protect: never restart one from the installer.
 game_up() { curl -sf -m 3 "$1" >/dev/null 2>&1; }
 
-slug() { tr '[:upper:]' '[:lower:]' <<<"$1" | tr -c 'a-z0-9\n' '_' | sed 's/__*/_/g; s/^_//; s/_$//' | cut -c1-24; }
+slug() { tr '[:upper:]' '[:lower:]' <<<"$1" | tr -c 'a-z0-9\n' '_' | sed 's/__*/_/g; s/^_//' | cut -c1-24 | sed 's/_*$//'; }
 
 # discord GET PATH: Discord API call with the configured bot token.
 discord() { curl -sf -m 15 -H "Authorization: Bot $DISCORD_TOKEN" "https://discord.com/api/v10$1"; }
