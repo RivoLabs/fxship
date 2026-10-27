@@ -31,16 +31,25 @@ type jobLimits struct {
 	priority  uint32  // process priority class
 }
 
-func limitsFor(name string) jobLimits {
+// limitsFor reads FX_CPU_CORES and FX_MEMORY_MAX_MB from the server's env file (the installer writes
+// them for dev from DEV_CPU_CORES and DEV_MEMORY_MAX_MB).
+func limitsFor(name string, settings []string) jobLimits {
 	l := jobLimits{priority: windows.ABOVE_NORMAL_PRIORITY_CLASS}
 	if name == "dev" {
 		l = jobLimits{cpuCores: 2, memoryMax: 4 << 30, priority: windows.BELOW_NORMAL_PRIORITY_CLASS}
 	}
-	if v, err := strconv.ParseFloat(env("FX_CPU_CORES", ""), 64); err == nil {
-		l.cpuCores = v
-	}
-	if v, err := strconv.ParseUint(env("FX_MEMORY_MAX_MB", ""), 10, 64); err == nil {
-		l.memoryMax = v << 20
+	for _, kv := range settings {
+		k, v, _ := strings.Cut(kv, "=")
+		switch k {
+		case "FX_CPU_CORES":
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				l.cpuCores = f
+			}
+		case "FX_MEMORY_MAX_MB":
+			if n, err := strconv.ParseUint(v, 10, 64); err == nil {
+				l.memoryMax = n << 20
+			}
+		}
 	}
 	return l
 }
@@ -134,7 +143,8 @@ func fxserverCmd(args []string) int {
 		root := env("FIVEM_ROOT", paths().FivemRoot)
 		fxDir := env("FXSERVER_DIR", filepath.Join(root, "artifacts", "current"))
 		envPath := filepath.Join(filepath.Dir(paths().EnvFile), name+".env")
-		if _, err := newJob(limitsFor(name)); err != nil {
+		settings, _ := readEnv(envPath)
+		if _, err := newJob(limitsFor(name, settings)); err != nil {
 			log.Printf("%s: resource limits not applied: %v", svcName, err)
 		}
 		out := &rotating{path: filepath.Join(logDir(), svcName+"-console.log"), max: 50 << 20}

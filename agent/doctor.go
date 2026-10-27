@@ -308,7 +308,7 @@ func checkBackups(c *checker) {
 	b, err := os.ReadFile(mark)
 	if err != nil {
 		if serviceActive("fxship-backup.timer") || runtime.GOOS == "windows" && scheduledTaskExists("fxship-backup") {
-			c.warn("backups", "scheduled but none has finished yet", "run a backup now: fxship-backup run")
+			c.warn("backups", "scheduled but none has finished yet", "run a backup now: fxship backup run")
 		} else {
 			c.warn("backups", "not set up: a dead disk would lose the database", "re-run the installer and turn backups on")
 		}
@@ -316,7 +316,7 @@ func checkBackups(c *checker) {
 	}
 	f := strings.Fields(string(b))
 	if len(f) < 2 {
-		c.warn("backups", "can't read "+mark, "run a backup now: fxship-backup run")
+		c.warn("backups", "can't read "+mark, "run a backup now: fxship backup run")
 		return
 	}
 	at, _ := strconv.ParseInt(f[0], 10, 64)

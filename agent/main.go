@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -23,12 +24,19 @@ var version = "dev"
 func main() {
 	// systemd and the Windows service manager hand the daemon its settings already; the file is
 	// root-only, so it is only read when they aren't there.
-	if err := loadEnvFile(envFile()); err != nil && !os.IsNotExist(err) && !(os.IsPermission(err) && os.Getenv("API_TOKEN") != "") {
+	// The Windows game-server supervisor runs as the server's own account, which can't read it and
+	// doesn't need it.
+	supervisor := len(os.Args) > 1 && os.Args[1] == "fxserver"
+	if err := loadEnvFile(envFile()); err != nil && !supervisor && !os.IsNotExist(err) && !(os.IsPermission(err) && os.Getenv("API_TOKEN") != "") {
 		fmt.Fprintf(os.Stderr, "reading %s: %v\n", envFile(), err)
 		if os.IsPermission(err) {
 			fmt.Fprintln(os.Stderr, "run it as root (sudo fxship ...), or from an elevated PowerShell on Windows")
 		}
 		os.Exit(1)
+	}
+	// Windows services only see the PATH from boot time, so the installer lists the tool folders.
+	if p := os.Getenv("FXSHIP_PATH"); p != "" {
+		os.Setenv("PATH", p+string(os.PathListSeparator)+os.Getenv("PATH"))
 	}
 	if len(os.Args) > 1 && os.Args[1] == "daemon" {
 		if !asService("fxship", daemon, nil) {
@@ -177,7 +185,7 @@ func serveAPI(cfg *Config, a *Agent) {
 
 func cli(args []string) int {
 	base := "http://" + env("API_ADDR", "127.0.0.1:7070")
-	who := env("SUDO_USER", env("USER", "root"))
+	who := env("SUDO_USER", env("USER", env("USERNAME", "root")))
 	call := func(method, route string, payload map[string]string) int {
 		if os.Getenv("API_TOKEN") == "" {
 			fmt.Fprintf(os.Stderr, "no API_TOKEN: run as root (or an elevated PowerShell on Windows) so %s can be read\n", envFile())
@@ -190,7 +198,7 @@ func cli(args []string) int {
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := (&http.Client{Timeout: 30 * time.Minute}).Do(req)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%v\nis the agent running? systemctl status fxship\n", err)
+			fmt.Fprintf(os.Stderr, "%v\nis the agent running? %s\n", err, map[bool]string{true: "Get-Service fxship", false: "systemctl status fxship"}[runtime.GOOS == "windows"])
 			return 1
 		}
 		defer resp.Body.Close()
@@ -242,6 +250,12 @@ func cli(args []string) int {
 		return detectCmd(args[1:])
 	case "upgrade":
 		return upgrade(args[1:])
+	case "install":
+		return installCmd(args[1:])
+	case "backup":
+		return backupCmd(args[1:])
+	case "staff":
+		return staffCmd(args[1:])
 	case "cfg-sanitize":
 		return cfgSanitizeCmd(args[1:])
 	case "fxserver":

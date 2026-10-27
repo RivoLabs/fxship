@@ -3,6 +3,9 @@
 package main
 
 import (
+	"os"
+	"strings"
+
 	"golang.org/x/sys/windows"
 )
 
@@ -29,6 +32,14 @@ func fileOwner(p string) (string, bool) {
 	acct, dom, _, err := owner.LookupAccount("")
 	if err != nil {
 		return owner.String(), false
+	}
+	// The agent runs as SYSTEM and each game server as NT SERVICE\fxship-<name>: their files are
+	// fxship's own, like everything the fivem user writes on Linux.
+	if owner.IsWellKnown(windows.WinLocalSystemSid) || strings.EqualFold(dom, "NT SERVICE") && strings.HasPrefix(strings.ToLower(acct), "fxship") {
+		return "", true
+	}
+	if h, _ := os.Hostname(); strings.EqualFold(dom, h) {
+		return acct, false // a local account: staff from "fxship staff add"
 	}
 	if dom != "" && dom != "BUILTIN" {
 		return dom + `\` + acct, false

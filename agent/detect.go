@@ -170,18 +170,7 @@ func detectCmd(args []string) int {
 		fmt.Println(string(b))
 		return 0
 	}
-	fmt.Printf("Layout:      %s\n", map[string]string{"resources": "resources folder (repo root holds the resources)", "server-data": "server-data folder (server.cfg and resources/ in the repo)"}[d.Layout])
-	fmt.Printf("Framework:   %s\n", d.Framework)
-	fmt.Printf("Resources:   %d\n", d.Resources)
-	fmt.Printf("Core (%d):    %s\n", len(d.Core), joinOr(d.Core, "none"))
-	fmt.Printf("Streaming (%d): %s\n", len(d.Streaming), joinOr(clipList(d.Streaming, 12), "none"))
-	if len(d.CfgRemoved) > 0 {
-		fmt.Printf("server.cfg:  fxship takes out %s (set per server, kept secret, or set in txAdmin)\n", strings.Join(d.CfgRemoved, ", "))
-	}
-	for _, w := range d.Warnings {
-		fmt.Println("Warning:     " + w)
-	}
-	fmt.Println("\nChanges to core or streaming resources wait for a restart; everything else goes live.")
+	printDetection(d, "")
 	return 0
 }
 
@@ -197,4 +186,22 @@ func clipList(xs []string, n int) []string {
 		return xs
 	}
 	return append(append([]string{}, xs[:n]...), fmt.Sprintf("and %d more", len(xs)-n))
+}
+
+// printDetection shows what Detect found, each line starting with prefix.
+func printDetection(d *Detection, prefix string) {
+	line := func(format string, a ...any) { fmt.Fprintf(stdout, prefix+format+"\n", a...) }
+	line("Layout:      %s", map[string]string{"resources": "resources folder (repo root holds the resources)", "server-data": "server-data folder (server.cfg and resources/ in the repo)"}[d.Layout])
+	line("Framework:   %s", d.Framework)
+	line("Resources:   %d", d.Resources)
+	line("Core (%d):    %s", len(d.Core), joinOr(d.Core, "none"))
+	line("Streaming (%d): %s", len(d.Streaming), joinOr(clipList(d.Streaming, 12), "none"))
+	if len(d.CfgRemoved) > 0 {
+		line("server.cfg:  fxship takes out %s (set per server, kept secret, or set in txAdmin)", strings.Join(d.CfgRemoved, ", "))
+	}
+	for _, w := range d.Warnings {
+		line("Warning:     %s", w)
+	}
+	fmt.Fprintln(stdout)
+	line("Changes to core or streaming resources wait for a restart; everything else goes live.")
 }

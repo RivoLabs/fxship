@@ -23,7 +23,7 @@ type Git struct {
 }
 
 func (g *Git) run(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", append([]string{"-c", "safe.directory=*"}, args...)...)
 	if dir != "" {
 		cmd.Dir = dir
 	}
