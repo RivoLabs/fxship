@@ -30,16 +30,35 @@ if [ "${ID:-}" != ubuntu ] || [ "${VERSION_ID:-}" != 24.04 ]; then
   [ "${FXSHIP_ANY_OS:-0}" = 1 ] || { echo "fxship supports Ubuntu 24.04 (this is ${PRETTY_NAME:-unknown}); set FXSHIP_ANY_OS=1 to try anyway" >&2; exit 1; }
 fi
 
-# Piped from curl: fetch the release bundle and run its installer instead.
+# Piped from curl: fetch the release bundle, check it against the release's checksums, and run its
+# installer instead. FXSHIP_VERSION picks a release, FXSHIP_REPO a fork, GITHUB_TOKEN reads a private one.
 BUNDLE=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)
 if [ -z "$BUNDLE" ] || [ ! -f "$BUNDLE/installer/linux/lib.sh" ]; then
-  command -v curl >/dev/null || { apt-get update -qq && apt-get install -y -qq curl; }
-  tag=$(curl -fsSL https://api.github.com/repos/RivoLabs/fxship/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')
-  [ -n "$tag" ] || { echo "couldn't find the latest fxship release" >&2; exit 1; }
+  command -v curl >/dev/null && command -v jq >/dev/null || { apt-get update -qq && apt-get install -y -qq curl jq; }
+  repo=${FXSHIP_REPO:-RivoLabs/fxship}
+  api=https://api.github.com/repos/$repo/releases/latest
+  [ -n "${FXSHIP_VERSION:-}" ] && api=https://api.github.com/repos/$repo/releases/tags/$FXSHIP_VERSION
+  auth=(); [ -n "${GITHUB_TOKEN:-}" ] && auth=(-H "Authorization: Bearer $GITHUB_TOKEN")
+  rel=$(curl -fsSL "${auth[@]}" -H 'Accept: application/vnd.github+json' "$api") || { echo "couldn't find the fxship release ($api)" >&2; exit 1; }
+  tag=$(jq -r .tag_name <<<"$rel") name="fxship_$(jq -r '.tag_name | ltrimstr("v")' <<<"$rel")_linux_amd64.tar.gz"
+  tgz_url=$(jq -r --arg n "$name" '.assets[] | select(.name == $n) | .url' <<<"$rel")
+  sum_url=$(jq -r '.assets[] | select(.name == "checksums.txt") | .url' <<<"$rel")
+  [ -n "$tgz_url" ] && [ -n "$sum_url" ] || { echo "release $tag has no $name or checksums.txt" >&2; exit 1; }
   dir=/opt/fxship/releases/$tag
   mkdir -p "$dir"
-  curl -fsSL "https://github.com/RivoLabs/fxship/releases/download/$tag/fxship_${tag#v}_linux_amd64.tar.gz" | tar -xz -C "$dir" --strip-components=1
-  exec bash "$dir/install.sh" "$@" </dev/tty
+  echo "Downloading fxship $tag..."
+  curl -fsSL "${auth[@]}" -H 'Accept: application/octet-stream' -o "$dir/$name" "$tgz_url"
+  want=$(curl -fsSL "${auth[@]}" -H 'Accept: application/octet-stream' "$sum_url" | awk -v n="$name" '$2 == n {print $1}')
+  if [ -z "$want" ] || [ "$(sha256sum "$dir/$name" | cut -d' ' -f1)" != "$want" ]; then
+    rm -f "$dir/$name"
+    echo "checksum mismatch for $name, nothing was installed" >&2
+    exit 1
+  fi
+  tar -xzf "$dir/$name" -C "$dir" --strip-components=1
+  # The questions are read from the terminal, as stdin is this script. With no terminal (cloud-init,
+  # CI) only --config runs work.
+  if { : </dev/tty; } 2>/dev/null; then exec bash "$dir/install.sh" "$@" </dev/tty; fi
+  exec bash "$dir/install.sh" "$@" </dev/null
 fi
 export BUNDLE
 
