@@ -1,0 +1,40 @@
+# Publishes the guide to GitHub Pages (https://rivolabs.github.io/fxship/) from main. GitHub only
+# serves Pages for private repositories on paid plans, so this waits until the repository is public.
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: docs
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/dist
+      - id: deploy
+        uses: actions/deploy-pages@v4

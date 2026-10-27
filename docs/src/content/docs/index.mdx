@@ -1,0 +1,61 @@
+---
+title: What fxship does
+description: Ship to your FiveM server from GitHub, with every change tested on dev and approved in Discord.
+---
+
+import { Card, CardGrid, LinkCard, Steps } from '@astrojs/starlight/components';
+
+fxship runs your FiveM server's production and dev copies on one machine and moves changes between
+them for you. Your resources live in a GitHub repository. When someone pushes, the dev server loads
+the change, checks it, and posts a card in Discord. Nothing reaches your players until someone with
+the right role presses **Approve**.
+
+<Steps>
+
+1. **Someone pushes to GitHub**, or a staff member saves a file on the dev server.
+2. **Dev loads it live.** Lua files are syntax-checked and dev's console is read for new errors.
+3. **A card appears in Discord** with the commits, the resources that change, and the results,
+   plus **Approve** and **Reject** buttons only your approver roles can press.
+4. **On Approve**, changes that can load live go live on prod at once. Changes that need a restart
+   land at your next scheduled restart. **Reject** leaves prod exactly as it is.
+
+</Steps>
+
+<CardGrid>
+	<Card title="Prod never kicks players for a deploy" icon="approve-check">
+		Scripts and UI go live without a restart. Maps, vehicles, clothing and core resources wait for
+		your next scheduled restart, so players are never thrown off for an update.
+	</Card>
+	<Card title="Dev tests every change" icon="magnifier">
+		Changed Lua files are syntax-checked, the change is loaded on dev, and dev's console is read for new
+		errors. The card tells you what happened before you approve.
+	</Card>
+	<Card title="Staff edit dev directly" icon="pencil">
+		Staff open dev's files over SFTP (Linux) or a mapped drive (Windows). What they save loads on dev
+		at once, and **Ship** in Discord commits it to GitHub under their name.
+	</Card>
+	<Card title="Safe by default" icon="warning">
+		Dev has its own database, its own license key if you want, and can't bind prod's port or take
+		prod's Tebex purchases. Admin pages are on Tailscale. Staff can't touch prod or read secrets.
+	</Card>
+</CardGrid>
+
+## Works with your server as it is
+
+fxship looks at your repository and works out what it needs:
+
+- **Streaming resources**: anything with a `stream/` folder, `data_file` entries or `this_is_a_map`.
+- **Core resources** for Qbox, QBCore, ESX, ox_core, ND and vRP, plus database and voice resources.
+- **Your layout**: just the `resources` folder in git, or the whole `server-data` folder with
+  `server.cfg`.
+
+Anything it gets wrong can be overridden with [one setting](/fxship/reference/configuration/#deploys).
+
+## Get started
+
+<CardGrid>
+	<LinkCard title="Before you start" description="The machine, accounts and keys you need." href="/fxship/start/requirements/" />
+	<LinkCard title="Put your server in git" description="Move an existing server into a GitHub repository, secrets left out." href="/fxship/guides/server-in-git/" />
+	<LinkCard title="Install on Ubuntu 24.04" description="One command, a few questions." href="/fxship/install/linux/" />
+	<LinkCard title="Install on Windows Server" description="Windows Server 2022 and 2025." href="/fxship/install/windows/" />
+</CardGrid>

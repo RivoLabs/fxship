@@ -7,12 +7,12 @@
 Production and dev servers on one machine, a Discord card for every push,
 and nothing reaches your players until someone presses **Approve**.
 
-[![Ubuntu 24.04](https://img.shields.io/badge/Ubuntu-24.04-E95420?logo=ubuntu&logoColor=white)](docs/src/content/docs/install/linux.md)
-[![Windows Server 2022 | 2025](https://img.shields.io/badge/Windows%20Server-2022%20%7C%202025-0078D4?logo=windows&logoColor=white)](docs/src/content/docs/install/windows.md)
+[![Ubuntu 24.04](https://img.shields.io/badge/Ubuntu-24.04-E95420?logo=ubuntu&logoColor=white)](https://rivolabs.github.io/fxship/install/linux/)
+[![Windows Server 2022 | 2025](https://img.shields.io/badge/Windows%20Server-2022%20%7C%202025-0078D4?logo=windows&logoColor=white)](https://rivolabs.github.io/fxship/install/windows/)
 [![Any framework](https://img.shields.io/badge/Qbox%20%C2%B7%20QBCore%20%C2%B7%20ESX%20%C2%B7%20ox__core-any%20framework-6E56CF)](#works-with-any-server)
 [![MIT license](https://img.shields.io/badge/license-MIT-3BA55D)](LICENSE)
 
-[Install](#install) · [How it works](#how-a-change-reaches-players) · [Guide](docs/src/content/docs/index.mdx) · [Used by](#used-by)
+[Install](#install) · [How it works](#how-a-change-reaches-players) · [Guide](https://rivolabs.github.io/fxship/) · [Used by](#used-by)
 
 </div>
 
@@ -63,7 +63,7 @@ flowchart LR
 
 You need a fresh **Ubuntu 24.04** or **Windows Server 2022/2025** machine, your server's resources
 in a GitHub repo, a [Cfx.re license key](https://portal.cfx.re), and a Discord bot
-([how to make one](docs/src/content/docs/guides/discord-bot.md)).
+([how to make one](https://rivolabs.github.io/fxship/guides/discord-bot/)).
 
 **Ubuntu 24.04**, as root:
 
@@ -81,7 +81,7 @@ The installer asks a few questions (it has a sensible default for each), sets ev
 finishes with `fxship doctor`. Run it again any time to change a setting: it only changes what's
 different and never restarts a server with players on it.
 
-New to git? [Put your server in git](docs/src/content/docs/guides/server-in-git.md) first.
+New to git? [Put your server in git](https://rivolabs.github.io/fxship/guides/server-in-git/) first.
 
 ## Works with any server
 
@@ -130,9 +130,9 @@ In Discord: `/deploy status`, `/deploy rollback`, `/deploy apply-now`, `/deploy 
 
 ## Documentation
 
-The [guide](docs/src/content/docs/index.mdx) covers requirements, both installers, setting up
+The [guide](https://rivolabs.github.io/fxship/) covers requirements, both installers, setting up
 the Discord bot, the daily workflow, staff access, backups and restores, every setting,
-troubleshooting, and why fxship is built the way it is.
+troubleshooting, and why fxship is built the way it is. Its source is in [`docs/`](docs/src/content/docs).
 
 ## License
 
