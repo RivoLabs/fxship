@@ -36,7 +36,7 @@ var cfgNames = map[string][2]string{
 	"sv_licensekey":           {"sv_licenseKey", "a secret: set per server in secrets.cfg"},
 	"mysql_connection_string": {"mysql_connection_string", "a secret: set per server in secrets.cfg"},
 	"rcon_password":           {"rcon_password", "a secret: put it in secrets.cfg if you use rcon"},
-	"sv_tebexsecret":          {"sv_tebexSecret", "a secret: prod's is in its secrets.cfg"},
+	"sv_tebexsecret":          {"sv_tebexSecret", "a secret: prod keeps it in its secrets.cfg"},
 	"onesync":                 {"onesync", "a txAdmin setting (Settings > FXServer)"},
 }
 

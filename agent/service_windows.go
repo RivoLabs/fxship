@@ -54,11 +54,19 @@ func (s *service) Execute(_ []string, req <-chan svc.ChangeRequest, status chan<
 // logDir is where Windows services write the logs journald keeps on Linux.
 func logDir() string { return filepath.Join(filepath.Dir(paths().EnvFile), "logs") }
 
-// logToFile points the standard logger at logs\<name>.log, keeping one older file of 20 MB.
+// serviceLogDir: each game server writes into its own folder, which only its account may change, so
+// dev can't read or wipe prod's console. The agent and backups write to logs\ itself.
+func serviceLogDir(name string) string {
+	if name == "fxship-prod" || name == "fxship-dev" {
+		return filepath.Join(logDir(), name)
+	}
+	return logDir()
+}
+
+// logToFile points the standard logger at <serviceLogDir>\<name>.log, keeping one older file of 20 MB.
 func logToFile(name string) {
-	w := &rotating{path: filepath.Join(logDir(), name+".log"), max: 20 << 20}
-	os.MkdirAll(logDir(), 0o755)
-	log.SetOutput(w)
+	os.MkdirAll(serviceLogDir(name), 0o755)
+	log.SetOutput(&rotating{path: filepath.Join(serviceLogDir(name), name+".log"), max: 20 << 20})
 }
 
 // rotating is a log file that moves itself to .1 once it passes max bytes.

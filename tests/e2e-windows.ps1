@@ -18,7 +18,7 @@ $data = "C:\ProgramData\fxship"
 
 if ($CollectLogs) {
     New-Item -ItemType Directory -Force $CollectLogs | Out-Null
-    Copy-Item "$data\logs\*" $CollectLogs -ErrorAction SilentlyContinue
+    Copy-Item "$data\logs\*" $CollectLogs -Recurse -ErrorAction SilentlyContinue
     if (Test-Path $fx) {
         & $fx status *> "$CollectLogs\status.json"
         & $fx doctor *> "$CollectLogs\doctor.txt"
@@ -43,7 +43,7 @@ function WaitFor([scriptblock]$cond, [int]$seconds, [string]$what) {
 }
 function Status { & $fx status | ConvertFrom-Json }
 function Release($id) { (Status).releases | Where-Object { $_.id -eq $id } }
-function Console($name) { Get-Content "$data\logs\fxship-$name-console.log" -Raw -ErrorAction SilentlyContinue }
+function Console($name) { Get-Content "$data\logs\fxship-$name\fxship-$name-console.log" -Raw -ErrorAction SilentlyContinue }
 function Up($port) { try { (Invoke-WebRequest "http://127.0.0.1:$port/info.json" -TimeoutSec 3 -UseBasicParsing).StatusCode -eq 200 } catch { $false } }
 
 foreach ($v in "CFX_KEY", "DEPLOY_KEY", "E2E_REPO", "E2E_BRANCH") {
@@ -90,6 +90,27 @@ Step "Install from the bundle"
 $bundle = Get-ChildItem "$Dist\fxship_*_windows_amd64.zip" | Select-Object -First 1
 Expand-Archive $bundle.FullName "C:\e2e\bundle" -Force
 $installer = (Get-ChildItem "C:\e2e\bundle\*\install.ps1").FullName
+# Resources layout: server.cfg comes from the owner's old server, as it would on a real move.
+$cfgSource = "starter"
+if (-not $prefix) {
+    $cfgSource = "C:\e2e\oldserver"
+    New-Item -ItemType Directory -Force $cfgSource | Out-Null
+    @"
+sv_maxclients 32
+set steam_webApiKey "none"
+sets locale "en-GB"
+endpoint_add_tcp "0.0.0.0:30120"
+endpoint_add_udp "0.0.0.0:30120"
+sv_licenseKey "cfxk_from_the_old_box"
+ensure mapmanager
+ensure spawnmanager
+ensure basic-gamemode
+ensure baseevents
+ensure oxmysql
+ensure fxship_probe
+ensure testcar
+"@ | Set-Content -Encoding ascii "$cfgSource\server.cfg"
+}
 @"
 BRAND_NAME="E2E City"
 TOPOLOGY="one-ip"
@@ -97,7 +118,7 @@ DEV_GAME_PORT="30130"
 RESTART_TIMES="06:00,18:00"
 REPO_URL="$repoUrl"
 REPO_BRANCH="$branch"
-CFG_SOURCE="starter"
+CFG_SOURCE="$cfgSource"
 PROD_LICENSE_KEY="$($env:CFX_KEY)"
 TX_USER="admin"
 FX_BUILD="recommended"
@@ -183,11 +204,13 @@ Set-Content -LiteralPath "S:\resources\[local]\fxship_probe\staff.lua" "print('[
 Remove-PSDrive S
 WaitFor { (Status).devEdit.files.Count -gt 0 } 120 "edit picked up on dev"
 WaitFor { (Console dev) -match "staff edit $v" } 60 "dev loaded the staff edit"
-$edit = (Status).devEdit
-Check (($edit | ConvertTo-Json -Depth 5) -match 'sam') "edit credited to sam"
-& $fx ship | Out-Null
-Push-Location $work; git pull -q origin $branch; $author = git log -1 --format='%an'; Pop-Location
-Check ($author -eq 'sam') "shipped to GitHub as sam (author: $author)"
+$staffFile = (Status).devEdit.files | Where-Object { $_.path -like '*staff.lua' }
+Check ($staffFile.owner -eq 'sam') "the card credits staff.lua to sam (owner: $($staffFile.owner))"
+& $fx ship "Staff edit from sam" | Out-Null
+Check ($LASTEXITCODE -eq 0) "fxship ship"
+# The commit is authored by whoever pressed Ship: here this admin, from the command line.
+Push-Location $work; git pull -q origin $branch 2>&1 | Out-Null; $author = git log -1 --format='%an'; $files = git show --name-only --format= HEAD; Pop-Location
+Check ($author -eq $env:USERNAME -and ($files -join ' ') -match 'staff.lua') "shipped to GitHub as $author with staff.lua"
 & $fx staff remove sam | Out-Null
 
 Step "Database refresh and backups"

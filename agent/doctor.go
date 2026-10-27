@@ -168,6 +168,9 @@ func doctor(args []string) int {
 
 func logsHint(svc string) string {
 	if runtime.GOOS == "windows" {
+		if svc == "fxship-prod" || svc == "fxship-dev" {
+			return `read C:\ProgramData\fxship\logs\` + svc + `\` + svc + `-console.log`
+		}
 		return `read C:\ProgramData\fxship\logs\` + svc + `.log`
 	}
 	return "journalctl -u " + svc + " -n 50"

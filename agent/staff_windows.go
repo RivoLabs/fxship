@@ -67,7 +67,7 @@ if (Get-LocalUser -Name $env:FXSHIP_STAFF_NAME -ErrorAction SilentlyContinue) {
 }
 Add-LocalGroupMember -Group '`+staffGrp+`' -Member $env:FXSHIP_STAFF_NAME -ErrorAction SilentlyContinue`)
 	// The password goes through the environment, never a command line other processes can read.
-	cmd.Env = append(os.Environ(), "FXSHIP_STAFF_PW="+pass, "FXSHIP_STAFF_NAME="+name)
+	cmd.Env = append(winPSEnv(), "FXSHIP_STAFF_PW="+pass, "FXSHIP_STAFF_NAME="+name)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "creating %s: %v\n%s\nrun the installer first so the %s group and share exist\n", name, err, strings.TrimSpace(string(out)), staffGrp)
 		return 1

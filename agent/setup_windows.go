@@ -57,6 +57,7 @@ type winSetup struct {
 	creds   string // the root-only credentials file
 	upgrade bool
 	tsName  string
+	fxDir   string // the FXServer build both servers run
 }
 
 func installCmd(args []string) int {
@@ -122,6 +123,7 @@ func installCmd(args []string) int {
 		w.fxserver()
 		w.servers()
 		w.agent()
+		w.onesyncFromRepo()
 		w.permissions()
 		w.startServers()
 		w.backups()
@@ -150,8 +152,11 @@ func must(what string, name string, args ...string) string {
 }
 
 func powershell(script string) (string, error) {
-	return run("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command",
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command",
 		"$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; "+script)
+	cmd.Env = winPSEnv()
+	out, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(out)), err
 }
 
 // psq quotes a string for a PowerShell single-quoted literal.
@@ -1128,14 +1133,17 @@ func (w *winSetup) fxserver() {
 			die("%v", err)
 		}
 	}
-	cur := filepath.Join(arts, "current")
-	was, _ := os.Readlink(cur)
-	if !strings.EqualFold(filepath.Clean(was), filepath.Clean(dest)) {
-		os.Remove(cur) // removes the junction only, never the build it points at
-		must("linking the current build", "cmd", "/c", "mklink", "/J", cur, dest)
+	// Each server's env file names its build folder (FXSERVER_DIR). A junction would be simpler, but
+	// txAdmin's Node runtime can't resolve paths through one.
+	w.fxDir = dest
+	was := ""
+	if b, err := os.ReadFile(filepath.Join(w.data, "prod.env")); err == nil {
+		if m := regexp.MustCompile(`(?m)^FXSERVER_DIR=(.*)$`).FindSubmatch(b); m != nil {
+			was = strings.TrimSpace(string(m[1]))
+		}
 	}
 	if was != "" && !strings.EqualFold(filepath.Clean(was), filepath.Clean(dest)) {
-		okf("build %s (servers switch to it at their next restart)", build)
+		okf("build %s (each server switches to it when its service next restarts)", build)
 	} else {
 		okf("build %s", build)
 	}
@@ -1201,11 +1209,9 @@ func (w *winSetup) servers() {
 	step("Game servers")
 	for _, n := range w.servers_() {
 		base, data := filepath.Join(w.root, n), w.serverData(n)
-		for _, d := range []string{base, filepath.Join(base, "txData", "default")} {
+		// In the server-data layout git fills this folder later, moving fxship's own files aside.
+		for _, d := range []string{base, data, filepath.Join(base, "txData", "default")} {
 			os.MkdirAll(d, 0o755)
-		}
-		if c.get("REPO_LAYOUT") != "server-data" {
-			os.MkdirAll(data, 0o755)
 		}
 		w.importCfgs(data)
 		for _, f := range []struct{ name, block string }{{"instance.cfg", instanceCfg(c, n)}, {"secrets.cfg", secretsCfg(c, n)}} {
@@ -1238,8 +1244,8 @@ func (w *winSetup) servers() {
 		if err != nil {
 			die("%v", err)
 		}
-		envf := fmt.Sprintf("TXHOST_DATA_PATH=%s\nTXHOST_TXA_PORT=%s\nTXHOST_PROVIDER_NAME=%s\nTXHOST_IGNORE_DEPRECATED_CONFIGS=true\nTXHOST_DEFAULT_ACCOUNT=%s::%s\n",
-			filepath.Join(base, "txData"), port, c.get("BRAND_NAME"), c.get("TX_USER"), hash)
+		envf := fmt.Sprintf("FXSERVER_DIR=%s\nTXHOST_DATA_PATH=%s\nTXHOST_TXA_PORT=%s\nTXHOST_PROVIDER_NAME=%s\nTXHOST_IGNORE_DEPRECATED_CONFIGS=true\nTXHOST_DEFAULT_ACCOUNT=%s::%s\n",
+			w.fxDir, filepath.Join(base, "txData"), port, c.get("BRAND_NAME"), c.get("TX_USER"), hash)
 		if w.tsName != "" || c.get("TS_NAME") != "" {
 			envf += fmt.Sprintf("TXHOST_TXA_URL=http://%s:%s\n", firstNonEmpty(w.tsName, c.get("TS_NAME")), port)
 		}
@@ -1481,6 +1487,35 @@ func (w *winSetup) agent() {
 	}
 }
 
+// onesyncFromRepo: in the server-data layout server.cfg only arrives with the first checkout, so its
+// onesync mode reaches txAdmin's settings here (only while txAdmin has none of its own).
+func (w *winSetup) onesyncFromRepo() {
+	for _, n := range w.servers_() {
+		src, err := os.ReadFile(filepath.Join(w.serverData(n), "server.cfg"))
+		if err != nil {
+			continue
+		}
+		mode := CfgOneSync(src)
+		tp := filepath.Join(w.root, n, "txData", "default", "config.json")
+		old, err := os.ReadFile(tp)
+		if mode == "" || err != nil {
+			continue
+		}
+		var cfg map[string]any
+		if json.Unmarshal(old, &cfg) != nil {
+			continue
+		}
+		srv, _ := cfg["server"].(map[string]any)
+		if srv == nil || srv["onesync"] != nil {
+			continue
+		}
+		srv["onesync"] = mode
+		if b, err := json.MarshalIndent(cfg, "", "  "); err == nil {
+			writeIfChanged(tp, b)
+		}
+	}
+}
+
 // infoURL: where fxship asks a game server if it's up. Two-ip servers listen on their own IP only;
 // the others listen everywhere, and loopback works even if the public IP is NAT'd. A server still
 // running on two-ip endpoints until its next restart answers on its IP only.
@@ -1525,7 +1560,10 @@ func (w *winSetup) permissions() {
 		icacls(filepath.Join(w.root, "artifacts"), "/grant:r", acct+":(OI)(CI)RX")
 		icacls(filepath.Join(w.data, n+".env"), "/inheritance:r", "/grant:r", sidSystem+":F", "/grant:r", sidAdmins+":F", "/grant:r", acct+":R")
 		icacls(w.data, "/grant:r", acct+":(RX)")
-		icacls(filepath.Join(w.data, "logs"), "/grant:r", acct+":(OI)(CI)M")
+		icacls(filepath.Join(w.data, "logs"), "/grant:r", acct+":(RX)")
+		ld := filepath.Join(w.data, "logs", "fxship-"+n)
+		os.MkdirAll(ld, 0o755)
+		icacls(ld, "/grant:r", acct+":(OI)(CI)M")
 		// secrets.cfg: its own server reads it; staff editing dev never can.
 		sec := filepath.Join(w.serverData(n), "secrets.cfg")
 		icacls(sec, "/inheritance:r", "/grant:r", sidSystem+":F", "/grant:r", sidAdmins+":F", "/grant:r", acct+":R")
@@ -1606,7 +1644,7 @@ func (w *winSetup) startServers() {
 			okf("%s is up", n)
 		} else {
 			warnf("%s didn't answer within 5 minutes: check txAdmin (port %s) or %s", n,
-				map[string]string{"prod": "40120", "dev": "40130"}[n], filepath.Join(w.data, "logs", svcName+"-console.log"))
+				map[string]string{"prod": "40120", "dev": "40130"}[n], filepath.Join(w.data, "logs", svcName, svcName+"-console.log"))
 		}
 	}
 }

@@ -141,13 +141,12 @@ func fxserverCmd(args []string) int {
 	run := func() {
 		svcName := "fxship-" + name
 		root := env("FIVEM_ROOT", paths().FivemRoot)
-		fxDir := env("FXSERVER_DIR", filepath.Join(root, "artifacts", "current"))
 		envPath := filepath.Join(filepath.Dir(paths().EnvFile), name+".env")
 		settings, _ := readEnv(envPath)
 		if _, err := newJob(limitsFor(name, settings)); err != nil {
 			log.Printf("%s: resource limits not applied: %v", svcName, err)
 		}
-		out := &rotating{path: filepath.Join(logDir(), svcName+"-console.log"), max: 50 << 20}
+		out := &rotating{path: filepath.Join(serviceLogDir(svcName), svcName+"-console.log"), max: 50 << 20}
 		for {
 			mu.Lock()
 			if stopped {
@@ -160,6 +159,13 @@ func fxserverCmd(args []string) int {
 				log.Printf("%s: %v (retrying in 30s)", svcName, err)
 				time.Sleep(30 * time.Second)
 				continue
+			}
+			// The installer names the build in the env file; it's re-read before every start.
+			fxDir := filepath.Join(root, "artifacts", "current")
+			for _, kv := range extra {
+				if k, v, _ := strings.Cut(kv, "="); k == "FXSERVER_DIR" && v != "" {
+					fxDir = v
+				}
 			}
 			cmd := exec.Command(filepath.Join(fxDir, "FXServer.exe"))
 			cmd.Dir = filepath.Join(root, name)

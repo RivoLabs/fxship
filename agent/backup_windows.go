@@ -81,7 +81,7 @@ func backupStage() string {
 
 func backupRun() (code int) {
 	mark := paths().BackupMark
-	logf, _ := os.OpenFile(filepath.Join(filepath.Dir(paths().EnvFile), "logs", "backup.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	logf, _ := os.OpenFile(filepath.Join(filepath.Dir(paths().EnvFile), "logs", "fxship-backup.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	var out io.Writer = os.Stdout
 	if logf != nil {
 		defer logf.Close()

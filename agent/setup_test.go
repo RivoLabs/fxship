@@ -234,3 +234,18 @@ func TestFxArtifactLive(t *testing.T) {
 		t.Error("build 1 found")
 	}
 }
+
+// FiveM starts a new command at every ; even inside a # comment, and quotes change how a line is
+// split, so nothing fxship generates may contain either outside real values.
+func TestGeneratedCfgIsSafe(t *testing.T) {
+	src := "sv_licenseKey x\nendpoint_add_tcp x\nendpoint_add_udp x\nsv_hostname x\nset sv_listingIpOverride x\nset sv_master1 x\n" +
+		"set mysql_connection_string x\nrcon_password x\nset sv_tebexSecret x\nset onesync on\n"
+	out, _ := SanitizeCfg([]byte(src))
+	for _, text := range []string{string(out), fxshipCfg} {
+		for _, line := range strings.Split(text, "\n") {
+			if strings.HasPrefix(line, "#") && strings.ContainsAny(line, ";'\"") {
+				t.Errorf("generated comment would run as a command: %q", line)
+			}
+		}
+	}
+}

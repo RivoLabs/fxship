@@ -27,7 +27,7 @@ step_fxserver() {
   local was; was=$(readlink /opt/fivem/current 2>/dev/null || true)
   ln -sfn "$dest" /opt/fivem/current
   if [ -n "$was" ] && [ "$was" != "$dest" ]; then
-    ok "build $build (servers switch to it at their next restart)"
+    ok "build $build (each server switches to it when its service next restarts)"
   else
     ok "build $build"
   fi

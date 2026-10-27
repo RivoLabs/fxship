@@ -115,6 +115,7 @@ func upgrade(args []string) int {
 	cmd := exec.Command("bash", filepath.Join(dir, "install.sh"), "--upgrade")
 	if runtime.GOOS == "windows" {
 		cmd = exec.Command("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", filepath.Join(dir, "install.ps1"), "-Upgrade")
+		cmd.Env = winPSEnv()
 	}
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {

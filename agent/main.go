@@ -280,9 +280,12 @@ Deploys (talk to the running agent):
 The box:
   doctor              check every piece of the setup and say how to fix what's wrong
   detect <dir>        show the framework, core and streaming resources fxship sees in a folder
+  backup <command>    run, list, restore-db <prod|dev> [snapshot], restore-files <snapshot> <dir>
+  staff <command>     Windows: add <name>, remove <name>, list (on Linux: fxship-add-staff)
   upgrade [--check]   update fxship to the latest release
+  install             Windows: set up or change this box (install.ps1 runs it)
   version             print the version
-  daemon              run the agent (systemd does this)`)
+  daemon              run the agent (its service does this)`)
 	if args[0] == "help" || args[0] == "-h" || args[0] == "--help" {
 		return 0
 	}
