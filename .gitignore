@@ -1,0 +1,9 @@
+secrets/
+*.env
+.env*
+*.pem
+*_key
+*_key.pub
+id_*
+secrets.cfg
+state.json
