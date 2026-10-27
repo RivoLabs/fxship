@@ -12,8 +12,8 @@ step_monitoring() {
       compose_up
     fi
     # Kuma answers HTTP well before its socket API is ready on first start; wait for both.
-    local n
-    for n in $(seq 1 60); do curl -sf -m 3 http://127.0.0.1:3001/ >/dev/null && break; sleep 3; done
+    local _
+    for _ in $(seq 1 60); do curl -sf -m 3 http://127.0.0.1:3001/ >/dev/null && break; sleep 3; done
     if [ ! -x "$FXSHIP_SHARE/venv/bin/python" ]; then
       python3 -m venv "$FXSHIP_SHARE/venv"
       "$FXSHIP_SHARE/venv/bin/pip" install -q 'python-socketio[client]==5.*' websocket-client

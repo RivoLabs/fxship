@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -282,6 +283,12 @@ func cfgSanitizeCmd(args []string) int {
 	if _, err := SyncCfg(args[0]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
+	}
+	// The installers hand the onesync mode on to txAdmin, which owns it.
+	if src, err := os.ReadFile(filepath.Join(args[0], "server.cfg")); err == nil {
+		if mode := CfgOneSync(src); mode != "" {
+			fmt.Println("onesync " + mode)
+		}
 	}
 	return 0
 }

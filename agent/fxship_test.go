@@ -25,6 +25,7 @@ rcon_password hunter2
 set sv_tebexSecret abc
 sets sv_projectName "My Server"
 set mysql_slow_query_warning 1500
+set onesync legacy
 ensure oxmysql
 exec resources.cfg
 `
@@ -40,9 +41,18 @@ exec resources.cfg
 			t.Errorf("sanitized cfg lost %q", kept)
 		}
 	}
-	want := "endpoint_add_tcp,endpoint_add_udp,sv_licensekey,mysql_connection_string,sv_hostname,sv_listingipoverride,sv_master1,rcon_password,sv_tebexsecret"
+	want := "endpoint_add_tcp,endpoint_add_udp,sv_licenseKey,mysql_connection_string,sv_hostname,sv_listingIpOverride,sv_master1,rcon_password,sv_tebexSecret,onesync"
 	if got := strings.Join(removed, ","); got != want {
 		t.Errorf("removed = %s, want %s", got, want)
+	}
+	if !strings.Contains(s, "# [fxship] sv_licenseKey is a secret: set per server in secrets.cfg\n") {
+		t.Errorf("no note for the license key:\n%s", s)
+	}
+	if got := CfgOneSync([]byte(src)); got != "legacy" {
+		t.Errorf("CfgOneSync = %q, want legacy", got)
+	}
+	if got := CfgOneSync([]byte("sv_maxclients 48\n")); got != "" {
+		t.Errorf("CfgOneSync with no line = %q", got)
 	}
 }
 

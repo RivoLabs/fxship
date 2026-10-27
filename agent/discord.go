@@ -174,7 +174,7 @@ func (d *Discord) card(r *Release) []discordgo.MessageComponent {
 			}
 			ls = append(ls, fmt.Sprintf("%s: %s", clip(l.Path, 70), clip(l.Msg, 110)))
 		}
-		checks = append(checks, fmt.Sprintf("Syntax: %d issue(s)\n```\n%s\n```", len(r.Lint), strings.Join(ls, "\n")))
+		checks = append(checks, fmt.Sprintf("Syntax: %d %s\n```\n%s\n```", len(r.Lint), plural(len(r.Lint), "issue", "issues"), strings.Join(ls, "\n")))
 	}
 	devLine, devLog, _ := strings.Cut(r.DevReport, "\n")
 	switch {
@@ -190,7 +190,7 @@ func (d *Discord) card(r *Release) []discordgo.MessageComponent {
 	}
 	inner = append(inner, divider(), discordgo.TextDisplay{Content: strings.Join(checks, "\n")})
 
-	foot := fmt.Sprintf("-# %d files changed · +%d −%d lines · prod `%s` → `%s` · <t:%d:R>", r.FileCount, r.Added, r.Deleted, short(r.From), short(r.To), r.CreatedAt.Unix())
+	foot := fmt.Sprintf("-# %d %s changed · +%d −%d lines · prod `%s` → `%s` · <t:%d:R>", r.FileCount, plural(r.FileCount, "file", "files"), r.Added, r.Deleted, short(r.From), short(r.To), r.CreatedAt.Unix())
 	inner = append(inner, discordgo.TextDisplay{Content: d.footer(foot)})
 
 	if row := d.buttons(r); row != nil {

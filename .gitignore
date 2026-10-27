@@ -7,3 +7,4 @@ secrets/
 id_*
 secrets.cfg
 state.json
+/bin/

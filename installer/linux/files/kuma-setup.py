@@ -86,6 +86,11 @@ for m in sorted(monitors.values(), key=lambda m: m["id"]):
         print("removing duplicate:", m["name"], call("deleteMonitor", m["id"]).get("msg"))
     else:
         have[m["name"]] = m
+# Dropping dev (prod-only) drops its monitors, or they would sit there red forever.
+if not dev:
+    for gone in (name + " dev", "txAdmin dev"):
+        if gone in have:
+            print("removing:", gone, call("deleteMonitor", have.pop(gone)["id"]).get("msg"))
 for m in want:
     old = have.get(m["name"])
     if old is None:

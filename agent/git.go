@@ -42,7 +42,8 @@ func (g *Git) bare(args ...string) (string, error) {
 
 // localFiles are written into server-data by the installer and the agent, never by the repo. In
 // the server-data layout they sit inside the worktree, so git must not see them as changes.
-var localFiles = []string{"/fxship.cfg", "/instance.cfg", "/secrets.cfg", "/server.fxship.cfg", "/cache/", "/txData/"}
+// .replxx_history is FXServer's console history, written to the folder it runs in.
+var localFiles = []string{"/fxship.cfg", "/instance.cfg", "/secrets.cfg", "/server.fxship.cfg", "/cache/", "/txData/", "/.replxx_history"}
 
 // Ensure clones the bare repository on first run (a large repo takes a while, once) and keeps the
 // shared exclude list that every worktree reads.

@@ -22,11 +22,26 @@ import (
 	"sync"
 )
 
-// reInstanceLine matches the commands that must differ per server or must stay out of git. Group 1
-// is the command or convar name.
-var reInstanceLine = regexp.MustCompile(`(?i)^\s*(?:(?:set|sets|setr)\s+)?(endpoint_add_tcp|endpoint_add_udp|sv_licensekey|sv_hostname|sv_listingipoverride|sv_master1|mysql_connection_string|rcon_password|sv_tebexsecret)\b`)
+// reInstanceLine matches the commands that must differ per server, must stay out of git, or belong
+// to txAdmin. Group 1 is the command or convar name.
+var reInstanceLine = regexp.MustCompile(`(?i)^\s*(?:(?:set|sets|setr)\s+)?(endpoint_add_tcp|endpoint_add_udp|sv_licensekey|sv_hostname|sv_listingipoverride|sv_master1|mysql_connection_string|rcon_password|sv_tebexsecret|onesync)\b`)
 
-// SanitizeCfg returns src with per-server and secret lines commented out, plus the names it took out.
+// cfgNames spells each name the way the FiveM docs do, and says where its value comes from instead.
+var cfgNames = map[string][2]string{
+	"endpoint_add_tcp":        {"endpoint_add_tcp", "set per server in instance.cfg"},
+	"endpoint_add_udp":        {"endpoint_add_udp", "set per server in instance.cfg"},
+	"sv_hostname":             {"sv_hostname", "set per server in instance.cfg"},
+	"sv_listingipoverride":    {"sv_listingIpOverride", "set per server in instance.cfg"},
+	"sv_master1":              {"sv_master1", "set per server in instance.cfg"},
+	"sv_licensekey":           {"sv_licenseKey", "a secret: set per server in secrets.cfg"},
+	"mysql_connection_string": {"mysql_connection_string", "a secret: set per server in secrets.cfg"},
+	"rcon_password":           {"rcon_password", "a secret: put it in secrets.cfg if you use rcon"},
+	"sv_tebexsecret":          {"sv_tebexSecret", "a secret: prod's is in its secrets.cfg"},
+	"onesync":                 {"onesync", "a txAdmin setting (Settings > FXServer)"},
+}
+
+// SanitizeCfg returns src with per-server, secret and txAdmin-owned lines commented out, plus the
+// names it took out.
 func SanitizeCfg(src []byte) ([]byte, []string) {
 	var out bytes.Buffer
 	var removed []string
@@ -37,11 +52,11 @@ func SanitizeCfg(src []byte) ([]byte, []string) {
 	for sc.Scan() {
 		line := sc.Text()
 		if m := reInstanceLine.FindStringSubmatch(line); m != nil {
-			name := strings.ToLower(m[1])
-			fmt.Fprintf(&out, "# [fxship] %s is set in instance.cfg or secrets.cfg\n", name)
-			if !seen[name] {
-				seen[name] = true
-				removed = append(removed, name)
+			n := cfgNames[strings.ToLower(m[1])]
+			fmt.Fprintf(&out, "# [fxship] %s is %s\n", n[0], n[1])
+			if !seen[n[0]] {
+				seen[n[0]] = true
+				removed = append(removed, n[0])
 			}
 			continue
 		}
@@ -49,6 +64,27 @@ func SanitizeCfg(src []byte) ([]byte, []string) {
 		out.WriteByte('\n')
 	}
 	return out.Bytes(), removed
+}
+
+// CfgOneSync returns the onesync mode a server.cfg asks for (on, legacy or off), or "" if it doesn't
+// set one. txAdmin owns the setting, so the installer passes it on.
+func CfgOneSync(src []byte) string {
+	mode := ""
+	for _, line := range strings.Split(string(src), "\n") {
+		f := strings.Fields(strings.ToLower(line))
+		if len(f) >= 3 && (f[0] == "set" || f[0] == "setr" || f[0] == "sets") && f[1] == "onesync" {
+			v := strings.Trim(f[2], `"`)
+			switch v {
+			case "on", "legacy", "off":
+				mode = v
+			case "true", "1":
+				mode = "on"
+			case "false", "0":
+				mode = "off"
+			}
+		}
+	}
+	return mode
 }
 
 // cfgSync remembers what each server's server.cfg looked like when it was last sanitized.

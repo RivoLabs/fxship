@@ -62,7 +62,7 @@ func (d *Discord) editCard(e *DevEdit) []discordgo.MessageComponent {
 				}
 				ls = append(ls, fmt.Sprintf("%s: %s", clip(l.Path, 70), clip(l.Msg, 110)))
 			}
-			checks = append(checks, fmt.Sprintf("Syntax: **%d issue(s)**\n```\n%s\n```", len(e.Lint), strings.Join(ls, "\n")))
+			checks = append(checks, fmt.Sprintf("Syntax: **%d %s**\n```\n%s\n```", len(e.Lint), plural(len(e.Lint), "issue", "issues"), strings.Join(ls, "\n")))
 		}
 		line, logs, _ := strings.Cut(e.Reload, "\n")
 		switch {

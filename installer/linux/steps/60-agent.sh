@@ -1,5 +1,15 @@
 # The deploy agent: binary, service, and the first checkout of the repo onto both servers.
 # shellcheck shell=bash
+# info_url IP PORT: where fxship asks a game server if it is up. Two-ip servers listen on their own IP
+# only. The others listen everywhere, so loopback works even when the public IP is NAT'd and not on
+# this box, except for a server still running on two-ip endpoints until its next restart.
+info_url() {
+  local lo="http://127.0.0.1:$2/info.json" own="http://$1:$2/info.json"
+  if [ "$TOPOLOGY" = two-ip ]; then echo "$own"
+  elif ! game_up "$lo" && game_up "$own"; then echo "$own"
+  else echo "$lo"; fi
+}
+
 step_agent() {
   step "fxship agent"
   install -d -o fivem -g fivem "$FIVEM_ROOT/deploy"
@@ -9,11 +19,8 @@ step_agent() {
   else
     set_conf PROD_WORKTREE "$FIVEM_ROOT/prod/server-data/resources"; set_conf DEV_WORKTREE "$FIVEM_ROOT/dev/server-data/resources"
   fi
-  set_conf PROD_INFO_URL "http://127.0.0.1:$PROD_GAME_PORT/info.json"
-  set_conf DEV_INFO_URL "http://127.0.0.1:$DEV_GAME_PORT/info.json"
-  if [ "$TOPOLOGY" = two-ip ]; then
-    set_conf PROD_INFO_URL "http://$PROD_IP:$PROD_GAME_PORT/info.json"; set_conf DEV_INFO_URL "http://$DEV_IP:$DEV_GAME_PORT/info.json"
-  fi
+  set_conf PROD_INFO_URL "$(info_url "$PROD_IP" "$PROD_GAME_PORT")"
+  set_conf DEV_INFO_URL "$(info_url "$DEV_IP" "$DEV_GAME_PORT")"
   set_conf FIVEM_ROOT "$FIVEM_ROOT"
   load_conf
 

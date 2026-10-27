@@ -283,7 +283,7 @@ func (a *Agent) activate(x *TxAdmin, res []ResourceChange, allowRestart bool) (*
 				steps = append(steps, fmt.Sprintf("%s %s failed: %v", action, rc.Name, err))
 			}
 		}
-		steps = append(steps, fmt.Sprintf("reloaded %d resource(s)", len(res)))
+		steps = append(steps, fmt.Sprintf("reloaded %d %s", len(res), plural(len(res), "resource", "resources")))
 	}
 	time.Sleep(a.cfg.DevSettle)
 	errs := ConsoleErrors(x.LogSince(off), names)

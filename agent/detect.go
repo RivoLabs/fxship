@@ -176,7 +176,7 @@ func detectCmd(args []string) int {
 	fmt.Printf("Core (%d):    %s\n", len(d.Core), joinOr(d.Core, "none"))
 	fmt.Printf("Streaming (%d): %s\n", len(d.Streaming), joinOr(clipList(d.Streaming, 12), "none"))
 	if len(d.CfgRemoved) > 0 {
-		fmt.Printf("server.cfg:  fxship takes out %s and sets them per server\n", strings.Join(d.CfgRemoved, ", "))
+		fmt.Printf("server.cfg:  fxship takes out %s (set per server, kept secret, or set in txAdmin)\n", strings.Join(d.CfgRemoved, ", "))
 	}
 	for _, w := range d.Warnings {
 		fmt.Println("Warning:     " + w)

@@ -12,8 +12,8 @@ step_database() {
   else
     compose_up
   fi
-  local i
-  for i in $(seq 1 60); do root_sql -e 'select 1' >/dev/null 2>&1 && break; sleep 3; done
+  local _
+  for _ in $(seq 1 60); do root_sql -e 'select 1' >/dev/null 2>&1 && break; sleep 3; done
   if ! root_sql -e 'select 1' >/dev/null 2>&1; then
     if root_sql -e 'select 1' 2>&1 | grep -q 'Access denied'; then
       die "MariaDB is up but refuses MARIADB_ROOT_PASSWORD from $FXSHIP_ENV. Its data was created with another password: put that one back in $FXSHIP_ENV."

@@ -59,16 +59,18 @@ import_cfgs() {
   grep -iE '^\s*(set\s+)?sv_tebexSecret\b' "$data/server.cfg" >"$data/.tebex" 2>/dev/null || true
 }
 
-txadmin_json() { # txadmin_json prod|dev data
-  local i=$1 data=$2 f=$FIVEM_ROOT/$1/txData/default/config.json sched
+txadmin_json() { # txadmin_json prod|dev data onesync
+  local i=$1 data=$2 onesync=${3:-} f=$FIVEM_ROOT/$1/txData/default/config.json sched
   if [ "$i" = prod ]; then sched=$(jq -cn --arg s "$RESTART_TIMES" '$s | split(",")'); else sched='[]'; fi
   if [ -f "$f" ]; then
-    # Keep everything the owner set in txAdmin; only fxship's three settings are enforced.
-    jq --arg d "$data/" --argjson s "$sched" '.server.dataPath=$d | .server.cfgPath="fxship.cfg" | .restarter.schedule=$s' "$f" >"$f.new" && mv "$f.new" "$f"
+    # Keep everything the owner set in txAdmin; only fxship's three settings are enforced, and
+    # onesync is only filled in if txAdmin has none yet.
+    jq --arg d "$data/" --argjson s "$sched" --arg o "$onesync" \
+      '.server.dataPath=$d | .server.cfgPath="fxship.cfg" | .restarter.schedule=$s | if $o != "" then .server.onesync //= $o else . end' "$f" >"$f.new" && mv "$f.new" "$f"
   else
     local name=$BRAND_NAME; [ "$i" = dev ] && name="$BRAND_NAME [DEV]"
-    jq -n --arg n "$name" --arg d "$data/" --argjson s "$sched" \
-      '{version: 2, general: {serverName: $n}, server: {dataPath: $d, cfgPath: "fxship.cfg", autoStart: true}, restarter: {schedule: $s}}' >"$f"
+    jq -n --arg n "$name" --arg d "$data/" --argjson s "$sched" --arg o "$onesync" \
+      '{version: 2, general: {serverName: $n}, server: ({dataPath: $d, cfgPath: "fxship.cfg", autoStart: true} + (if $o != "" then {onesync: $o} else {} end)), restarter: {schedule: $s}}' >"$f"
   fi
 }
 
@@ -94,11 +96,13 @@ exec instance.cfg
 exec secrets.cfg
 exec server.fxship.cfg
 CFG
-    [ -f "$data/server.cfg" ] && fxship cfg-sanitize "$data"
+    local onesync=""
+    if [ -f "$data/server.cfg" ]; then onesync=$(fxship cfg-sanitize "$data" | awk '$1 == "onesync" {print $2}'); fi
     chown fivem:fivem "$data"/*.cfg; chmod 600 "$data/secrets.cfg"; chmod 644 "$data/fxship.cfg" "$data/instance.cfg"
     [ "$i" = dev ] && find "$data" -maxdepth 1 -name '*.cfg' ! -name secrets.cfg ! -name fxship.cfg ! -name 'server.fxship.cfg' ! -name instance.cfg -exec chmod 664 {} +
 
-    local port=$([ "$i" = prod ] && echo 40120 || echo 40130) hash
+    local port hash
+    port=$([ "$i" = prod ] && echo 40120 || echo 40130)
     hash=$(htpasswd -bnBC 11 "" "$( [ "$i" = prod ] && echo "$PROD_TX_PASSWORD" || echo "$DEV_TX_PASSWORD")" | tr -d ':\n' | sed 's/^\$2y\$/$2b$/')
     umask 077
     cat >/etc/fivem/$i.env <<ENV
@@ -110,7 +114,7 @@ TXHOST_DEFAULT_ACCOUNT=$TX_USER::$hash
 ENV
     umask 022
     [ -n "${TS_NAME:-}" ] && echo "TXHOST_TXA_URL=http://$TS_NAME:$port" >>/etc/fivem/$i.env
-    txadmin_json "$i" "$data"
+    txadmin_json "$i" "$data" "$onesync"
     chown -R fivem:fivem "$base/txData"
 
     install -d /etc/systemd/system/fivem@$i.service.d
@@ -125,6 +129,7 @@ ENV
   done
   if ! is_true "$DEV_ENABLED"; then
     systemctl disable --now fivem@dev >/dev/null 2>&1 || true
+    systemctl reset-failed fivem@dev >/dev/null 2>&1 || true
   fi
   systemctl daemon-reload
   for i in "${servers[@]}"; do systemctl enable "fivem@$i" >/dev/null 2>&1; done
@@ -133,7 +138,7 @@ ENV
 # start_servers runs after the agent has put the repo in place. Servers already up are left alone.
 start_servers() {
   step "Starting servers"
-  local i servers=(prod) port
+  local i servers=(prod) port url
   is_true "$DEV_ENABLED" && servers+=(dev)
   # server-data layout: server.cfg arrived with the repo; prod's Tebex secret moves to its secrets.
   local data=$FIVEM_ROOT/prod/server-data
@@ -142,14 +147,16 @@ start_servers() {
   fi
   for i in "${servers[@]}"; do
     port=$([ "$i" = prod ] && echo "$PROD_GAME_PORT" || echo "$DEV_GAME_PORT")
+    # Two-ip servers listen on their own IP only, so ask where fxship asks.
+    url=$([ "$i" = prod ] && echo "$PROD_INFO_URL" || echo "$DEV_INFO_URL")
     if systemctl is-active --quiet "fivem@$i"; then
       ok "$i is already running (changes apply at its next restart)"
       continue
     fi
     systemctl start "fivem@$i"
     info "waiting for $i to come up on port $port..."
-    local n
-    for n in $(seq 1 100); do game_up "http://127.0.0.1:$port/info.json" && break; sleep 3; done
-    if game_up "http://127.0.0.1:$port/info.json"; then ok "$i is up"; else warn "$i didn't answer within 5 minutes: check txAdmin ($( [ "$i" = prod ] && echo 40120 || echo 40130)) or journalctl -u fivem@$i"; fi
+    local _
+    for _ in $(seq 1 100); do game_up "$url" && break; sleep 3; done
+    if game_up "$url"; then ok "$i is up"; else warn "$i didn't answer within 5 minutes: check txAdmin ($( [ "$i" = prod ] && echo 40120 || echo 40130)) or journalctl -u fivem@$i"; fi
   done
 }

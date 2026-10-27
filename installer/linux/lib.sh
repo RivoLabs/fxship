@@ -107,11 +107,12 @@ ask_yes() {
 # choose VAR "Question" default option1 option2 ...: numbered menu, stores the chosen option.
 choose() {
   local var=$1 q=$2 def=$3; shift 3
-  local i=1 o ans cur=${!var:-$def}
+  local i=1 o ans cur=${!var:-$def} tag
   if [ "${YES:-0}" = 1 ]; then printf -v "$var" '%s' "$cur"; return; fi
+  tag=$([ -n "${!var:-}" ] && echo current || echo default)
   echo "  $q"
   for o in "$@"; do
-    printf '    %s%d)%s %s%s\n' "$B" "$i" "$N" "$o" "$( [ "${o%% *}" = "$cur" ] && echo " ${D}(current)${N}")"
+    printf '    %s%d)%s %s%s\n' "$B" "$i" "$N" "$o" "$( [ "${o%% *}" = "$cur" ] && echo " ${D}($tag, Enter)${N}")"
     i=$((i+1))
   done
   while :; do

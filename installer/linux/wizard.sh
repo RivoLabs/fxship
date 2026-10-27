@@ -1,6 +1,8 @@
 # The questions. Every answer lands in /etc/fxship/fxship.env, and on a re-run every question
 # offers the saved answer as its default, so re-running the installer is how settings change.
 # shellcheck shell=bash
+# Answers are saved through set_conf "$v" "${!v}", which shellcheck can't follow.
+# shellcheck disable=SC2034
 
 ensure_fivem_user() {
   id fivem >/dev/null 2>&1 || useradd --system --create-home --home-dir "$FIVEM_ROOT" --shell /usr/sbin/nologin fivem
@@ -19,7 +21,10 @@ github_known_hosts() {
 
 as_fivem() { runuser -u fivem -- env GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="$GIT_SSH_COMMAND" "$@"; }
 
-public_ips() { ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1; }
+# The box's own IPs, without Docker's and Tailscale's.
+public_ips() {
+  ip -4 -o addr show scope global | awk '$2 !~ /^(docker|br-|veth|tailscale|lxdbr|virbr)/ {print $4}' | cut -d/ -f1
+}
 
 wizard_server() {
   step "Your server"
@@ -33,7 +38,8 @@ wizard_server() {
     "one-ip     One public IP: prod on port 30120, dev on 30130 (most servers)" \
     "two-ip     Two public IPs: each server on its own IP, both on 30120" \
     "prod-only  No dev server: approved deploys go straight to prod, untested"
-  local ips first; ips=$(public_ips | tr '\n' ' '); first=${ips%% *}
+  local ips first second; ips=$(public_ips | tr '\n' ' '); first=${ips%% *}
+  second=$(public_ips | sed -n 2p)
   info "${D}IPs on this machine: ${ips:-none found}${N}"
   case $TOPOLOGY in
     one-ip|prod-only)
@@ -44,7 +50,7 @@ wizard_server() {
       ;;
     two-ip)
       ask PROD_IP "Prod public IP" "${PROD_IP:-$first}"
-      ask DEV_IP "Dev public IP (the second IP must already route to this box)" "$DEV_IP"
+      ask DEV_IP "Dev public IP (the second IP must already route to this box)" "${DEV_IP:-$second}"
       [ "$PROD_IP" != "$DEV_IP" ] || die "two-ip needs two different IPs"
       PROD_GAME_PORT=30120; DEV_GAME_PORT=30120; PUBLIC_IP=$PROD_IP
       ;;
