@@ -45,10 +45,22 @@ func upgrade(args []string) int {
 		} `json:"assets"`
 	}
 	if err := ghGet(api, "application/vnd.github+json", func(r io.Reader) error { return json.NewDecoder(r).Decode(&rel) }); err != nil {
+		if strings.Contains(err.Error(), "404 Not Found") {
+			if want != "" {
+				fmt.Fprintf(os.Stderr, "%s has no release %s\n", repo, want)
+			} else {
+				fmt.Fprintf(os.Stderr, "%s has no release yet (pre-releases only count with --version)\n", repo)
+			}
+			return 1
+		}
 		fmt.Fprintln(os.Stderr, "checking for releases:", err)
 		return 1
 	}
-	fmt.Printf("installed %s, latest %s\n", version, rel.Tag)
+	if want != "" {
+		fmt.Printf("installed %s, upgrading to %s\n", version, rel.Tag)
+	} else {
+		fmt.Printf("installed %s, latest %s\n", version, rel.Tag)
+	}
 	if check {
 		return 0
 	}
